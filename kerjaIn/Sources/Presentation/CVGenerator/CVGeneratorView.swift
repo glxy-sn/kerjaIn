@@ -220,6 +220,7 @@ private struct ImproveCVSection: View {
     var viewModel: CVGeneratorViewModel
     @State private var currentIndex: Int = 0
     @State private var goingForward: Bool = true
+    @State private var showScoreInfo = false
 
     private var items: [FeedbackItem] { viewModel.feedbackItems }
 
@@ -240,7 +241,7 @@ private struct ImproveCVSection: View {
                     Text("Improve CV")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Color.inkPrimary)
-                    Text("Gap Reviewer found ways to strengthen this. You supply the facts — the agent never invents them.")
+                    Text("Gap Reviewer found ways to strengthen this. You supply the facts, the agent never invents them.")
                         .font(.system(size: 12))
                         .foregroundStyle(Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -248,13 +249,32 @@ private struct ImproveCVSection: View {
 
                 Spacer()
 
-                VStack(spacing: 1) {
-                    Text("92%")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Color.inkPrimary)
-                    Text("match")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.inkTertiary)
+                if let score = viewModel.scoreBreakdown {
+                    VStack(alignment: .trailing, spacing: 5) {
+                        // Score + ⓘ button
+                        HStack(spacing: 5) {
+                            Text("\(score.matchScore)%")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(Color.inkPrimary)
+                            Text("match")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.inkTertiary)
+                                .padding(.top, 4)
+                            Button {
+                                showScoreInfo = true
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Color.inkTertiary)
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: $showScoreInfo, arrowEdge: .trailing) {
+                                ScoreBreakdownPopover(breakdown: score)
+                            }
+                        }
+                        // Readiness Gate badge
+                        ReadinessGateBadge(gate: score.gate)
+                    }
                 }
             }
             .padding(16)
@@ -326,6 +346,241 @@ private struct ImproveCVSection: View {
                 .disabled(viewModel.isGenerating)
             }
         }
+    }
+}
+
+// MARK: - Readiness Gate Badge
+
+private struct ReadinessGateBadge: View {
+    let gate: ReadinessGate
+
+    private var color: Color {
+        switch gate {
+        case .ready:        return Color.statusOffer
+        case .needsWork:    return Color.statusInterview
+        case .notQualified: return Color.statusRejected
+        }
+    }
+
+    private var bgColor: Color {
+        switch gate {
+        case .ready:        return Color.statusOfferBg
+        case .needsWork:    return Color.statusInterviewBg
+        case .notQualified: return Color.statusRejectedBg
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: gate.icon)
+                .font(.system(size: 10, weight: .semibold))
+            Text(gate.label)
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(bgColor)
+        .clipShape(Capsule())
+    }
+}
+
+// MARK: - Score Breakdown Popover
+
+private struct ScoreBreakdownPopover: View {
+    let breakdown: MatchScoreBreakdown
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Title
+            Text("How is this score calculated?")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Color.inkPrimary)
+
+            Divider()
+
+            // Score summary
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(breakdown.matchScore)%")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(Color.inkPrimary)
+                Text("match score")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.inkSecondary)
+            }
+
+            // Breakdown table
+            VStack(spacing: 0) {
+                PopoverTableHeader()
+                Divider()
+                PopoverTableRow(
+                    label: "Must-have",
+                    weight: "3",
+                    matched: breakdown.mustHaveMatched,
+                    partial: breakdown.mustHavePartial,
+                    missing: breakdown.mustHaveMissing,
+                    total: breakdown.mustHaveTotal
+                )
+                Divider()
+                PopoverTableRow(
+                    label: "Nice-to-have",
+                    weight: "1",
+                    matched: breakdown.niceToHaveMatched,
+                    partial: breakdown.niceToHavePartial,
+                    missing: breakdown.niceToHaveTotal - breakdown.niceToHaveMatched - breakdown.niceToHavePartial,
+                    total: breakdown.niceToHaveTotal
+                )
+            }
+            .background(Color.fieldBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.appSeparator, lineWidth: 1))
+
+            // Formula note
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Formula")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.inkSecondary)
+                Text("Σ(weight × match) / Σ(max weight)")
+                    .font(.system(size: 11).monospaced())
+                    .foregroundStyle(Color.inkSecondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Matched = 1.0  ·  Partial = 0.5  ·  Missing = 0.0")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.inkTertiary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(String(format: "= %.1f / %.0f = %d%%", breakdown.numerator, breakdown.denominator, breakdown.matchScore))
+                    .font(.system(size: 11).monospaced())
+                    .foregroundStyle(Color.inkSecondary)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.fieldBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Divider()
+
+            // Readiness Gate
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text("Readiness Gate")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.inkSecondary)
+                    ReadinessGateBadge(gate: breakdown.gate)
+                }
+
+                switch breakdown.gate {
+                case .ready:
+                    Text("All must-have requirements are fully matched.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.inkSecondary)
+                case .needsWork(let skills):
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("All must-haves are present, but \(skills.count == 1 ? "1 is" : "\(skills.count) are") only partially matched:")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.inkSecondary)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ForEach(skills, id: \.self) { skill in
+                            HStack(spacing: 5) {
+                                Circle().fill(Color.statusInterview).frame(width: 5, height: 5)
+                                Text(skill)
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .foregroundStyle(Color.inkPrimary)
+                                Text("(partial)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color.inkTertiary)
+                            }
+                        }
+                    }
+                case .notQualified(let skills):
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(skills.count == 1 ? "1 must-have is" : "\(skills.count) must-haves are") missing from your profile:")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.inkSecondary)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ForEach(skills, id: \.self) { skill in
+                            HStack(spacing: 5) {
+                                Circle().fill(Color.statusRejected).frame(width: 5, height: 5)
+                                Text(skill)
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .foregroundStyle(Color.inkPrimary)
+                                Text("(missing)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color.inkTertiary)
+                            }
+                        }
+                    }
+                }
+
+                Text("Nice-to-haves only affect the match score, never the gate.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.inkTertiary)
+                    .italic()
+            }
+        }
+        .padding(18)
+        .frame(width: 360)
+    }
+}
+
+private struct PopoverTableHeader: View {
+    var body: some View {
+        HStack {
+            Text("Type").frame(maxWidth: .infinity, alignment: .leading)
+            Text("W").frame(width: 22, alignment: .center)
+            Text("✓").frame(width: 28, alignment: .center)
+            Text("≈").frame(width: 28, alignment: .center)
+            Text("✗").frame(width: 28, alignment: .center)
+        }
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundStyle(Color.inkTertiary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+    }
+}
+
+private struct PopoverTableRow: View {
+    let label: String
+    let weight: String
+    let matched: Int
+    let partial: Int
+    let missing: Int
+    let total: Int
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Color.inkPrimary)
+                Text("\(total) requirements")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.inkTertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(weight)
+                .font(.system(size: 11.5, weight: .bold))
+                .foregroundStyle(Color.inkSecondary)
+                .frame(width: 22, alignment: .center)
+            Text("\(matched)")
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(Color.statusOffer)
+                .frame(width: 28, alignment: .center)
+            Text("\(partial)")
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(Color.statusInterview)
+                .frame(width: 28, alignment: .center)
+            Text("\(missing)")
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(missing > 0 ? Color.statusRejected : Color.inkTertiary)
+                .frame(width: 28, alignment: .center)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.white)
     }
 }
 

@@ -2,6 +2,44 @@ import Foundation
 import SwiftUI
 import Observation
 
+// MARK: - Match Scoring
+
+enum ReadinessGate {
+    case ready
+    case needsWork(partialSkills: [String])
+    case notQualified(missingSkills: [String])
+
+    var label: String {
+        switch self {
+        case .ready:        return "Ready"
+        case .needsWork:    return "Needs work"
+        case .notQualified: return "Not qualified"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .ready:        return "checkmark.circle.fill"
+        case .needsWork:    return "exclamationmark.circle.fill"
+        case .notQualified: return "xmark.circle.fill"
+        }
+    }
+}
+
+struct MatchScoreBreakdown {
+    let matchScore: Int
+    let gate: ReadinessGate
+    let mustHaveMatched: Int
+    let mustHavePartial: Int
+    let mustHaveMissing: Int
+    let mustHaveTotal: Int
+    let niceToHaveMatched: Int
+    let niceToHavePartial: Int
+    let niceToHaveTotal: Int
+    let numerator: Double
+    let denominator: Double
+}
+
 // MARK: - Feedback Types
 
 enum FeedbackTag {
@@ -59,6 +97,7 @@ final class CVGeneratorViewModel {
     ]
 
     var feedbackItems: [FeedbackItem] = []
+    var scoreBreakdown: MatchScoreBreakdown? = nil
     var lastGeneratedJD: String = ""
 
     var canGenerate: Bool {
@@ -125,6 +164,7 @@ final class CVGeneratorViewModel {
         isGenerating = true
         generationDone = false
         feedbackItems = []
+        scoreBreakdown = nil
         for i in steps.indices { steps[i].state = .waiting }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -135,9 +175,28 @@ final class CVGeneratorViewModel {
             }
             self.lastGeneratedJD = self.jobDescription
             self.feedbackItems = CVGeneratorViewModel.makeMockFeedback()
+            self.scoreBreakdown = CVGeneratorViewModel.makeMockScore()
             self.isGenerating = false
             self.generationDone = true
         }
+    }
+
+    private static func makeMockScore() -> MatchScoreBreakdown {
+        // Example from scoring doc: 5 must-have (4 matched, 1 partial, 0 missing) + 3 nice-to-have (2 matched)
+        // Score = (4×3×1.0 + 1×3×0.5 + 2×1×1.0) / (5×3 + 3×1) = 15.5/18 = 86%
+        MatchScoreBreakdown(
+            matchScore: 86,
+            gate: .needsWork(partialSkills: ["Core Data"]),
+            mustHaveMatched: 4,
+            mustHavePartial: 1,
+            mustHaveMissing: 0,
+            mustHaveTotal: 5,
+            niceToHaveMatched: 2,
+            niceToHavePartial: 0,
+            niceToHaveTotal: 3,
+            numerator: 15.5,
+            denominator: 18.0
+        )
     }
 
     private static func makeMockFeedback() -> [FeedbackItem] {
