@@ -7,10 +7,10 @@ import FoundationModels
 @available(macOS 26.0, *)
 @Generable(description: "Requirements extracted from a job description")
 struct ExtractedRequirements {
-    @Guide(description: "Must-have hard skills or technologies explicitly required by the job")
+    @Guide(description: "Must-have hard skills or technologies explicitly required. Ordered by priority: 1) hard technical skills, 2) job-title keywords, 3) required education/certifications, 4) soft skills. 1–5 words each.")
     var mustHaveSkills: [String]
 
-    @Guide(description: "Preferred or nice-to-have skills mentioned in the job description")
+    @Guide(description: "Preferred or nice-to-have skills mentioned in the job description. 1–5 words each.")
     var niceToHaveSkills: [String]
 
     @Guide(description: "The primary job title being hired for")
@@ -67,6 +67,9 @@ enum GapFeedbackType {
 struct GeneratedFeedbackItem {
     @Guide(description: "Whether this is a weak bullet to strengthen, or a skill missing from the profile")
     var type: GapFeedbackType
+
+    @Guide(description: "Exact reason code — one of: MISSING_METRIC, BANNED_VERB, CLICHE, MISSING_KEYWORD, NO_BACKING")
+    var reasonCode: String
 
     @Guide(description: "Short title describing the issue (max 8 words)")
     var title: String
@@ -152,6 +155,7 @@ enum CVGenerationService {
             You are a recruitment specialist. Extract structured job requirements from job descriptions.
             Be concise — each skill or requirement should be 1–5 words.
             Only extract requirements that are explicitly stated, not implied.
+            Rank mustHaveSkills by priority: hard technical skills first, then job-title keywords, then required education/certifications, then soft skills. Weight terms that recur across the posting or appear in the job title / requirements section.
             """)
         let response = try await session.respond(
             to: "Extract requirements from this job description:\n\n\(jd)",
@@ -173,10 +177,10 @@ enum CVGenerationService {
             The person's locale is en_US. You MUST respond in U.S. English.
             You are a CV reviewer. Compare a candidate profile against job requirements.
             Criteria:
-            - matched: profile clearly and directly demonstrates this requirement
-            - partial: profile shows limited or indirect evidence
-            - missing: profile has no evidence of this requirement
-            Be strict: only mark as matched if evidence is clear and direct.
+            - matched: profile has a clear, direct proof bullet for this requirement
+            - partial: profile shows indirect or limited evidence only
+            - missing: profile has no evidence — never mark matched without a real proof bullet
+            Be strict. Only use data the candidate explicitly provided. Never assume or infer skills not stated.
             """)
 
         let prompt = """
@@ -204,11 +208,13 @@ enum CVGenerationService {
     ) async throws -> ComposedCVContent {
         let session = LanguageModelSession(instructions: """
             The person's locale is en_US. You MUST respond in U.S. English.
-            You are an expert CV writer specializing in targeted job applications.
-            Write a concise professional summary (2–3 sentences) that connects the
-            candidate's real experience to the target role.
-            Only use facts from the provided profile — never invent or embellish.
-            Select the most relevant skills from the candidate's existing skill list.
+            You are an expert CV writer. Rules you must follow:
+            - Never invent facts. Use only data from the provided profile.
+            - Professional summary: 2–3 sentences. No "I", "me", or "my". Mirror the JD job title where the candidate genuinely held an equivalent role.
+            - Skills: pick only skills the candidate actually has, ordered by JD relevance.
+            - Distribute 8–12 JD keywords naturally across the summary — do not keyword-stuff.
+            - Never use banned openers: Responsible for / Helped / Assisted / Worked on / Involved in / Utilized / Leveraged.
+            - Aim for XYZ structure in any bullets: Accomplished [X] measured by [Y] by doing [Z].
             """)
 
         let prompt = """
@@ -239,10 +245,13 @@ enum CVGenerationService {
 
         let session = LanguageModelSession(instructions: """
             The person's locale is en_US. You MUST respond in U.S. English.
-            You are a CV improvement coach. Identify 2–4 specific, actionable improvements.
-            For weak bullets: ask one precise question to elicit a measurable result or number.
-            For missing skills: explain in one sentence why this skill matters for the role.
-            Never invent facts — improvements should prompt the user to provide their own real information.
+            You are a CV improvement coach. Identify 2–4 specific, actionable improvements. Set reasonCode to exactly one of:
+            - MISSING_METRIC: bullet describes a duty with no measurable outcome — ask for a number.
+            - BANNED_VERB: bullet opens with Responsible for/Helped/Assisted/Worked on/Involved in/Utilized/Leveraged — ask them to rewrite with a strong action verb.
+            - CLICHE: contains team player/hard worker/detail-oriented/results-oriented/go-getter/synergy — flag and ask to replace with evidence.
+            - MISSING_KEYWORD: JD skill the candidate partially demonstrates but hasn't stated explicitly — suggest adding it.
+            - NO_BACKING: JD skill the candidate truly lacks — do not suggest adding it; explain the gap.
+            Never invent facts. Never suggest skills the candidate hasn't done.
             """)
 
         let prompt = """
@@ -306,10 +315,7 @@ enum CVGenerationService {
 
     static func toFeedbackItems(_ output: GapReviewOutput) -> [FeedbackItem] {
         output.items.enumerated().map { idx, item in
-            let tag: FeedbackTag = item.type == .weakBullet ? .weakBullet : .missingSkill
-            let tagLabel = item.type == .weakBullet
-                ? "Weak bullet · missing impact"
-                : "Missing skill · can't be filled in"
+            let (tag, tagLabel, placeholder, helperText) = Self.feedbackMeta(for: item)
             return FeedbackItem(
                 id:               "fb-\(idx + 1)",
                 tag:              tag,
@@ -317,11 +323,47 @@ enum CVGenerationService {
                 title:            item.title,
                 bulletQuote:      item.existingBullet.isEmpty ? "" : "\"\(item.existingBullet)\"",
                 question:         item.improvementQuestion,
-                inputPlaceholder: "Describe the outcome…",
-                helperText:       "The agent weaves your answer in — it won't make up numbers.",
+                inputPlaceholder: placeholder,
+                helperText:       helperText,
                 missingDesc:      item.skillExplanation,
                 boldPhrases:      []
             )
+        }
+    }
+
+    private static func feedbackMeta(for item: GeneratedFeedbackItem) -> (FeedbackTag, String, String, String) {
+        switch item.reasonCode.uppercased() {
+        case "MISSING_METRIC":
+            return (.missingMetric,
+                    "Missing metric · add a number",
+                    "e.g. reduced load time by 40%, served 10k users",
+                    "The agent weaves your number in — it won't make up figures.")
+        case "BANNED_VERB":
+            return (.bannedVerb,
+                    "Banned verb · rewrite opener",
+                    "e.g. Built, Designed, Shipped, Reduced, Led",
+                    "Start with a strong past-tense action verb — it stops the recruiter's eye.")
+        case "CLICHE":
+            return (.cliche,
+                    "Cliché · replace with evidence",
+                    "e.g. what you actually did, with a result",
+                    "Replace the filler phrase with a concrete example or number.")
+        case "NO_BACKING":
+            return (.missingSkill,
+                    "No backing · can't be added",
+                    "",
+                    "This skill is missing from your profile. Gain real experience first, then add it.")
+        case "MISSING_KEYWORD":
+            return (.missingSkill,
+                    "Missing keyword · partially there",
+                    "Describe where you used this skill",
+                    "You have partial backing — add a real bullet to your profile to strengthen the match.")
+        default:
+            let isWeak = item.type == .weakBullet
+            return (isWeak ? .weakBullet : .missingSkill,
+                    isWeak ? "Weak bullet · missing impact" : "Missing skill · can't be filled in",
+                    "Describe the outcome…",
+                    "The agent weaves your answer in — it won't make up numbers.")
         }
     }
 }

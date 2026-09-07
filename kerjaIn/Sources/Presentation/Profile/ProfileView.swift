@@ -19,6 +19,18 @@ struct ProfileView: View {
                 .padding(.top, 28)
                 .padding(.bottom, 24)
 
+                // AI import review notice
+                if viewModel.showReviewNotice {
+                    AIReviewNoticeBanner {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            viewModel.showReviewNotice = false
+                        }
+                    }
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 // Two-column body
                 HStack(alignment: .top, spacing: 18) {
                     VStack(spacing: 18) {
@@ -62,7 +74,7 @@ struct ProfileView: View {
             let detail = viewModel.importSummaryLine.isEmpty
                 ? ""
                 : "\nFound: \(viewModel.importSummaryLine)\n"
-            Text("\(detail)\nImporting will replace all current profile data. This cannot be undone.")
+            Text("\(detail)\nImporting will replace all current profile data. This cannot be undone.\n\nAI extraction may not be 100% accurate, please review each section after import.")
         }
         .alert("Import Failed", isPresented: $viewModel.showImportError) {
             Button("OK") { viewModel.showImportError = false; viewModel.importError = nil }
@@ -1025,5 +1037,41 @@ private struct DocumentsCard: View {
             uploadedFileName = url.lastPathComponent
             onImport(url)
         }
+    }
+}
+
+// MARK: - AI Review Notice Banner
+
+private struct AIReviewNoticeBanner: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.statusApplied)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("AI import complete — please review your data")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+                Text("On-device AI may misclassify entries. Double-check each section before using your profile.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 1)
+        }
+        .padding(14)
+        .background(Color.statusApplied.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.statusApplied.opacity(0.25), lineWidth: 1))
     }
 }

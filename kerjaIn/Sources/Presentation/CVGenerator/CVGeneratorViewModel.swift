@@ -44,7 +44,11 @@ struct MatchScoreBreakdown {
 // MARK: - Feedback Types
 
 enum FeedbackTag {
-    case weakBullet, missingSkill
+    case weakBullet      // generic weak bullet
+    case missingMetric   // MISSING_METRIC — no measurable outcome
+    case bannedVerb      // BANNED_VERB — weak opener
+    case cliche          // CLICHE — filler self-descriptor
+    case missingSkill    // MISSING_KEYWORD or NO_BACKING
 }
 
 enum FeedbackState {

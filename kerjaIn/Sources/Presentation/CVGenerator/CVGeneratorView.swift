@@ -679,7 +679,7 @@ private struct FeedbackItemCard: View {
 
             // Footer: action buttons (left) + carousel nav (right)
             HStack(spacing: 10) {
-                if item.tag == .weakBullet {
+                if item.tag != .missingSkill {
                     Button("Apply") { onApply() }
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
@@ -742,10 +742,10 @@ private struct FeedbackItemCard: View {
     private var tagChip: some View {
         Text(item.tagLabel)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(item.tag == .weakBullet ? Color.statusInterview : Color.statusRejected)
+            .foregroundStyle(item.tag != .missingSkill ? Color.statusInterview : Color.statusRejected)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
-            .background(item.tag == .weakBullet ? Color.statusInterviewBg : Color.statusRejectedBg)
+            .background(item.tag != .missingSkill ? Color.statusInterviewBg : Color.statusRejectedBg)
             .clipShape(Capsule())
     }
 

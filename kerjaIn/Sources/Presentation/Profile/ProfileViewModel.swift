@@ -32,6 +32,7 @@ final class ProfileViewModel {
     var importError: String? = nil
     var showImportError = false
     var showImportConfirm = false
+    var showReviewNotice = false
     var importSummaryLine = ""
     private var pendingImportProfile: UserProfile? = nil
     private var pendingImportCVData: CVData? = nil
@@ -231,6 +232,7 @@ final class ProfileViewModel {
             cvData.profile = newProfile
             saveProfile()
             saveCVData()
+            showReviewNotice = true
         }
         pendingImportProfile = nil
         pendingImportCVData = nil
