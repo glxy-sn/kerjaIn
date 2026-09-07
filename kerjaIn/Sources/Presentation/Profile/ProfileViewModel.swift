@@ -27,6 +27,15 @@ final class ProfileViewModel {
     var isEditingProfile = false
     var editingProfile: UserProfile = .empty
 
+    // CV Import state
+    var isImporting = false
+    var importError: String? = nil
+    var showImportError = false
+    var showImportConfirm = false
+    var importSummaryLine = ""
+    private var pendingImportProfile: UserProfile? = nil
+    private var pendingImportCVData: CVData? = nil
+
     private let profileRepository: any ProfileRepository
     private let cvRepository: any CVRepository
 
@@ -185,6 +194,74 @@ final class ProfileViewModel {
     func deleteAchievement(id: String) { cvData.achievements.removeAll { $0.id == id }; saveCVData(); editingTarget = nil }
 
     func cancelEditing() { editingTarget = nil }
+
+    // MARK: - CV Import
+
+    // Called from View after synchronous text extraction (while NSOpenPanel access is still valid)
+    func importCV(fromText text: String) {
+        guard #available(macOS 26.0, *) else { return }
+        isImporting = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.isImporting = false }
+            do {
+                let (basic, sections) = try await CVImportService.parseCV(from: text)
+                let (newProfile, newCVData) = CVImportService.apply(
+                    basic: basic, sections: sections,
+                    preservingPhoto: self.profile.photoData
+                )
+                self.pendingImportProfile = newProfile
+                self.pendingImportCVData = newCVData
+                self.importSummaryLine = Self.makeSummaryLine(profile: newProfile, cvData: newCVData)
+                self.showImportConfirm = true
+            } catch let e as CVImportService.ImportError {
+                self.importError = e.errorDescription ?? "Import failed."
+                self.showImportError = true
+            } catch {
+                self.importError = "Parsing failed: \(error.localizedDescription)"
+                self.showImportError = true
+            }
+        }
+    }
+
+    func confirmImport() {
+        if let newProfile = pendingImportProfile, let newCVData = pendingImportCVData {
+            profile = newProfile
+            cvData = newCVData
+            cvData.profile = newProfile
+            saveProfile()
+            saveCVData()
+        }
+        pendingImportProfile = nil
+        pendingImportCVData = nil
+        showImportConfirm = false
+    }
+
+    func cancelImport() {
+        pendingImportProfile = nil
+        pendingImportCVData = nil
+        showImportConfirm = false
+        showImportError = false
+        importError = nil
+    }
+
+    private static func makeSummaryLine(profile: UserProfile, cvData: CVData) -> String {
+        var parts: [String] = []
+        if !profile.name.isEmpty { parts.append(profile.name) }
+        if !cvData.experiences.isEmpty {
+            let n = cvData.experiences.count
+            parts.append("\(n) experience\(n == 1 ? "" : "s")")
+        }
+        if !cvData.educations.isEmpty {
+            let n = cvData.educations.count
+            parts.append("\(n) education entr\(n == 1 ? "y" : "ies")")
+        }
+        if !cvData.projects.isEmpty {
+            let n = cvData.projects.count
+            parts.append("\(n) project\(n == 1 ? "" : "s")")
+        }
+        return parts.joined(separator: " · ")
+    }
 
     // MARK: - Photo
 

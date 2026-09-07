@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Observation
+import FoundationModels
 
 // MARK: - Match Scoring
 
@@ -168,17 +169,84 @@ final class CVGeneratorViewModel {
         for i in steps.indices { steps[i].state = .waiting }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            for i in self.steps.indices {
-                self.steps[i].state = .running
-                try? await Task.sleep(nanoseconds: 1_300_000_000)
-                self.steps[i].state = .done
+            if #available(macOS 26.0, *) {
+                let model = SystemLanguageModel.default
+                if case .available = model.availability {
+                    await self.runRealPipeline()
+                    return
+                }
             }
-            self.lastGeneratedJD = self.jobDescription
-            self.feedbackItems = CVGeneratorViewModel.makeMockFeedback()
-            self.scoreBreakdown = CVGeneratorViewModel.makeMockScore()
-            self.isGenerating = false
-            self.generationDone = true
+            await self.runMockPipeline()
         }
+    }
+
+    @MainActor
+    private func runRealPipeline() async {
+        guard #available(macOS 26.0, *) else {
+            await runMockPipeline()
+            return
+        }
+
+        let jd      = jobDescription
+        let profile = CVGenerationService.profileSummary(cvData)
+
+        do {
+            // Step 1 — RequirementExtractor
+            steps[0].state = .running
+            let requirements = try await CVGenerationService.extractRequirements(from: jd)
+            steps[0].state = .done
+
+            // Step 2 — RelevanceMatcher
+            steps[1].state = .running
+            let analysis = try await CVGenerationService.matchRelevance(
+                requirements: requirements,
+                profileSummary: profile
+            )
+            steps[1].state = .done
+
+            // Step 3 — CVComposer
+            steps[2].state = .running
+            let composed = try await CVGenerationService.composeCVContent(
+                jd: jd,
+                profileSummary: profile,
+                jobTitle: requirements.jobTitle
+            )
+            cvData.profile.summary = composed.professionalSummary
+            steps[2].state = .done
+
+            // Step 4 — GapReviewer
+            steps[3].state = .running
+            let gaps = try await CVGenerationService.reviewGaps(
+                matchAnalysis: analysis,
+                profileSummary: profile
+            )
+            steps[3].state = .done
+
+            // Finalise
+            lastGeneratedJD = jd
+            scoreBreakdown  = CVGenerationService.calculateScore(from: analysis)
+            feedbackItems   = CVGenerationService.toFeedbackItems(gaps)
+            isGenerating    = false
+            generationDone  = true
+        } catch {
+            // LLM error — fall back to mock so the user still sees a result
+            for i in steps.indices where steps[i].state != .done { steps[i].state = .done }
+            await runMockPipeline()
+        }
+    }
+
+    @MainActor
+    private func runMockPipeline() async {
+        for i in steps.indices {
+            steps[i].state = .running
+            try? await Task.sleep(nanoseconds: 1_300_000_000)
+            steps[i].state = .done
+        }
+        lastGeneratedJD = jobDescription
+        feedbackItems   = CVGeneratorViewModel.makeMockFeedback()
+        scoreBreakdown  = CVGeneratorViewModel.makeMockScore()
+        isGenerating    = false
+        generationDone  = true
     }
 
     private static func makeMockScore() -> MatchScoreBreakdown {

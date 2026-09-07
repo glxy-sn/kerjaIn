@@ -32,8 +32,10 @@ struct ProfileView: View {
                     }
                     .frame(maxWidth: .infinity)
 
-                    DocumentsCard()
-                        .frame(width: 280)
+                    DocumentsCard(isImporting: viewModel.isImporting) { url in
+                        importCVFile(from: url, viewModel: viewModel)
+                    }
+                    .frame(width: 280)
                 }
                 .padding(.horizontal, 26)
                 .padding(.bottom, 40)
@@ -53,7 +55,37 @@ struct ProfileView: View {
                 onCancel: { viewModel.cancelProfileEdit() }
             )
         }
+        .alert("Import CV?", isPresented: $viewModel.showImportConfirm) {
+            Button("Import", role: .destructive) { viewModel.confirmImport() }
+            Button("Cancel", role: .cancel)      { viewModel.cancelImport() }
+        } message: {
+            let detail = viewModel.importSummaryLine.isEmpty
+                ? ""
+                : "\nFound: \(viewModel.importSummaryLine)\n"
+            Text("\(detail)\nImporting will replace all current profile data. This cannot be undone.")
+        }
+        .alert("Import Failed", isPresented: $viewModel.showImportError) {
+            Button("OK") { viewModel.showImportError = false; viewModel.importError = nil }
+        } message: {
+            Text(viewModel.importError ?? "")
+        }
         .onAppear { viewModel.load() }
+    }
+
+    // Called by DocumentsCard after NSOpenPanel closes — text extracted synchronously
+    // while the file-access grant from NSOpenPanel is still valid.
+    private func importCVFile(from url: URL, viewModel: ProfileViewModel) {
+        guard #available(macOS 26.0, *) else {
+            viewModel.importError = "CV import requires macOS 26 or later (Apple Intelligence)."
+            viewModel.showImportError = true
+            return
+        }
+        guard let text = CVImportService.extractText(from: url) else {
+            viewModel.importError = "Could not read the file. Make sure it is a text-based PDF (not a scanned image) or a plain .txt file."
+            viewModel.showImportError = true
+            return
+        }
+        viewModel.importCV(fromText: text)
     }
 
     private func pickPhoto(viewModel: ProfileViewModel) {
@@ -890,6 +922,9 @@ private struct SkillFlowLayout: Layout {
 // MARK: - Documents Card
 
 private struct DocumentsCard: View {
+    let isImporting: Bool
+    let onImport: (URL) -> Void
+
     @State private var uploadedFileName: String? = nil
 
     var body: some View {
@@ -911,7 +946,7 @@ private struct DocumentsCard: View {
                     Text("Upload your CV")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Color.inkPrimary)
-                    Text("PDF · auto-fills fields as draft")
+                    Text("PDF · auto-fills fields with AI")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Color.inkTertiary)
 
@@ -919,9 +954,10 @@ private struct DocumentsCard: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18).padding(.vertical, 7)
-                        .background(Color.inkPrimary)
+                        .background(isImporting ? Color.inkTertiary : Color.inkPrimary)
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                         .buttonStyle(.plain)
+                        .disabled(isImporting)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
@@ -930,7 +966,7 @@ private struct DocumentsCard: View {
                         .stroke(Color.appSeparator, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                 )
 
-                // Uploaded file row
+                // File row — shown after a file is chosen
                 if let name = uploadedFileName {
                     HStack(spacing: 10) {
                         ZStack {
@@ -941,22 +977,25 @@ private struct DocumentsCard: View {
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(.white)
                         }
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(name)
                                 .font(.system(size: 12.5, weight: .medium))
                                 .foregroundStyle(Color.inkPrimary)
                                 .lineLimit(1)
-                            Text("Uploaded")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.inkTertiary)
+                            if isImporting {
+                                HStack(spacing: 5) {
+                                    ProgressView().scaleEffect(0.55)
+                                    Text("Parsing with AI…")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Color.inkTertiary)
+                                }
+                            } else {
+                                Text("Ready to import")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color.inkTertiary)
+                            }
                         }
                         Spacer()
-                        Button("View") {
-                            // no-op for now
-                        }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.statusApplied)
-                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
                     .background(Color.fieldBackground)
@@ -976,12 +1015,15 @@ private struct DocumentsCard: View {
 
     private func pickCV() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.pdf]
+        panel.allowedContentTypes = [.pdf, .plainText]
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
+        panel.message = "Choose your CV (PDF or .txt)"
+        panel.prompt = "Import"
         if panel.runModal() == .OK, let url = panel.url {
             uploadedFileName = url.lastPathComponent
+            onImport(url)
         }
     }
 }
