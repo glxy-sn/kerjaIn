@@ -170,7 +170,11 @@ enum CVImportService {
         return combined.isEmpty ? nil : combined
     }
 
-    private static func findLabeledLines(from text: String, labelPrefixes: [String]) -> String? {
+    private static func findLabeledLines(
+        from text: String,
+        labelPrefixes: [String],
+        requireContent: Bool = false
+    ) -> String? {
         let upperPrefixes = labelPrefixes.map { $0.uppercased() }
         let matched = text.components(separatedBy: CharacterSet.newlines)
             .filter { line in
@@ -178,7 +182,14 @@ enum CVImportService {
                     .trimmingCharacters(in: .whitespaces)
                     .trimmingCharacters(in: CharacterSet(charactersIn: "-–•*·").union(.whitespaces))
                     .uppercased()
-                return upperPrefixes.contains(where: { content.hasPrefix($0) })
+                for prefix in upperPrefixes where content.hasPrefix(prefix) {
+                    if requireContent {
+                        let after = String(content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                        return !after.isEmpty
+                    }
+                    return true
+                }
+                return false
             }
         return matched.isEmpty ? nil : matched.joined(separator: "\n")
     }
@@ -209,8 +220,15 @@ enum CVImportService {
         let primary = await extractPrimaryContent(text: text, system: system)
 
         onProgress(0.75, "Extracting projects & other sections…")
-        let secondarySource = buildSecondarySource(from: text)
-        let secondary = await extractSecondaryContent(text: secondarySource, system: system)
+        // Try code-based parsing first for inline-label CVs ("- Projects: ...", "- Certifications: ...").
+        // Fall back to LLM only for traditional section-header CVs.
+        let secondary: ParsedSecondaryContent
+        if let inline = extractInlineLabels(from: text) {
+            secondary = inline
+        } else {
+            let secondarySource = buildSecondarySource(from: text)
+            secondary = await extractSecondaryContent(text: secondarySource, system: system)
+        }
 
         onProgress(1.0, "Done")
 
@@ -259,17 +277,17 @@ enum CVImportService {
                    : parts.joined(separator: "\n\n").prefix(4000).description
 
         let prompt = """
-            Extract ALL education and work experience entries from the resume sections below.
-            Output this JSON — the template shows 2 examples, add more objects for each additional entry found:
-            {"educations":[{"institution":"UNIVERSITY_1","degree":"DEGREE_1","field":"MAJOR_1","startYear":"2018","endYear":"2022","gpa":""},{"institution":"UNIVERSITY_2","degree":"DEGREE_2","field":"MAJOR_2","startYear":"2015","endYear":"2019","gpa":"3.5"}],"experiences":[{"company":"COMPANY_1","role":"ROLE_1","startDate":"Jan 2022","endDate":"Present","location":"","highlights":["bullet 1","bullet 2"]},{"company":"COMPANY_2","role":"ROLE_2","startDate":"Jun 2020","endDate":"Dec 2021","location":"","highlights":["bullet 1"]}]}
+            Complete this JSON template with ALL education and work experience from the resume. \
+            The template shows 2 examples — add more objects for each additional entry found. Use [] if none found:
+            {"educations":[{"institution":"...","degree":"...","field":"...","startYear":"...","endYear":"...","gpa":""},{"institution":"...","degree":"...","field":"...","startYear":"...","endYear":"...","gpa":""}],"experiences":[{"company":"...","role":"...","startDate":"...","endDate":"...","location":"","highlights":["...","..."]},{"company":"...","role":"...","startDate":"...","endDate":"...","location":"","highlights":["..."]}]}
 
             Rules:
-            - educations: ONLY formal degrees (Bachelor, Master, PhD, Diploma). NOT bootcamps or online courses.
-            - experiences: ALL jobs, internships, part-time, freelance.
-            - CRITICAL: Copy highlight bullets VERBATIM. If no bullets, use [].
-            - Include EVERY entry found — do not stop after 1 or 2.
+            - educations: formal university/college degrees ONLY (Bachelor, Master, PhD, Diploma). Not bootcamps.
+            - experiences: ALL jobs, internships, part-time, freelance work.
+            - Copy highlight bullets VERBATIM. If no bullets for an entry, use [].
+            - Include EVERY entry — do not stop after 1 or 2.
 
-            Resume sections:
+            Resume:
             \(source)
 
             Completed JSON:
@@ -281,42 +299,286 @@ enum CVImportService {
 
     private static func extractSecondaryContent(text: String, system: String) async -> ParsedSecondaryContent {
         let prompt = """
-            Extract ALL projects, certifications, organizations, and achievements from the resume below.
-            Output this JSON — the template shows 2 examples per section, add more objects for each entry found. Use [] if a section is empty.
-            {"projects":[{"name":"PROJECT_1","role":"Personal","techStack":"Swift, SwiftUI","highlights":["built X","integrated Y"]},{"name":"PROJECT_2","role":"Team Lead","techStack":"","highlights":[]}],"certifications":[{"name":"CERT_1","issuer":"ISSUER_1","issueDate":"2023","credentialURL":""},{"name":"CERT_2","issuer":"ISSUER_2","issueDate":"2022","credentialURL":""}],"organizations":[{"name":"ORG_1","role":"ROLE_1","startDate":"2021","endDate":"2023"},{"name":"ORG_2","role":"ROLE_2","startDate":"2020","endDate":"2021"}],"achievements":[{"title":"AWARD_1","issuer":"FROM_1","date":"2023","notes":""},{"title":"AWARD_2","issuer":"FROM_2","date":"2022","notes":""}]}
+            Complete this JSON template using the resume content below. \
+            The template shows 2 examples per section — add more objects for each additional entry. Use [] if a section is absent:
+            {"projects":[{"name":"...","role":"...","techStack":"...","highlights":["..."]},{"name":"...","role":"...","techStack":"","highlights":[]}],"certifications":[{"name":"...","issuer":"...","issueDate":"...","credentialURL":""},{"name":"...","issuer":"...","issueDate":"...","credentialURL":""}],"organizations":[{"name":"...","role":"...","startDate":"...","endDate":"..."},{"name":"...","role":"...","startDate":"...","endDate":"..."}],"achievements":[{"title":"...","issuer":"...","date":"...","notes":""},{"title":"...","issuer":"...","date":"...","notes":""}]}
 
-            Rules:
-            - CRITICAL for projects: Copy name, techStack, and highlights VERBATIM. If no description bullets, set highlights []. Do NOT invent content.
-            - certifications: professional certificates and licenses only.
-            - organizations: clubs, volunteer, extracurricular (ORGANISASI, KEPANITIAAN, UKM).
-            - achievements: awards, scholarships, competitions (PRESTASI, PENGHARGAAN).
-            - Include EVERY entry found — do not stop after 1 or 2.
+            - projects: coded software, apps, or tech tools
+            - certifications: certificates (name, issuer, year)
+            - organizations: clubs, committees, volunteer groups
+            - achievements: competition wins, scholarships, exchange programs
+            Include EVERY entry — do not stop after 1 or 2.
 
-            Resume sections:
+            Resume:
             \(text)
 
             Completed JSON:
             """
-        let raw = (try? await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 1200)) ?? ""
+        let raw = (try? await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 1400)) ?? ""
         return (try? MLXInferenceService.decode(ParsedSecondaryContent.self, from: raw))
             ?? ParsedSecondaryContent(projects: [], certifications: [], organizations: [], achievements: [])
     }
 
-    // Builds the best source text for secondary section extraction using the
-    // same section-detection logic from the original FoundationModels version.
+    // Builds the best source text for secondary section extraction.
+    // Handles both traditional CVs (standalone section headers) and
+    // compact CVs (inline labels like "- Certifications: Oracle Java SE 8 (2023)").
     private static func buildSecondarySource(from text: String) -> String {
+        // Traditional section-header format
         let projSection  = findSectionText(from: text, matching: ["PROJECT", "PORTFOLIO", "PROYEK"])
         let certSection  = findSectionText(from: text, matching: ["CERTIF", "LICENSE", "CREDENTIAL", "SERTIFIK"])
         let orgSection   = findSectionText(from: text, matching: ["ORGANIZATION", "EXTRACURRICULAR", "VOLUNTEER", "ORGANISASI", "KEPANITIAAN", "UKM"])
         let awardSection = findSectionText(from: text, matching: ["ACHIEVEMENT", "AWARD", "HONOR", "PRESTASI", "PENGHARGAAN"])
-        let combined     = findSectionText(from: text, matching: ["HONOR", "AWARD", "ADDITIONAL", "MISCELLANEOUS", "LAINNYA"])
+
+        // Inline-label format: "- Certifications: ...", "- Projects: ..." etc.
+        let inlineCert  = findLabeledLines(from: text, labelPrefixes: [
+            "Certifications:", "Certification:", "Sertifikasi:", "Sertifikat:"])
+        let inlineProj  = findLabeledLines(from: text, labelPrefixes: [
+            "Projects:", "Project:", "Proyek:"])
+        let inlineOrg   = findLabeledLines(from: text, labelPrefixes: [
+            "Organizations:", "Organization:", "Extracurricular:", "Volunteer:",
+            "Organisasi:", "Kepanitiaan:", "UKM:"])
+        let inlineAward = findLabeledLines(from: text, labelPrefixes: [
+            "Competitions:", "Competition:", "Scholarship:", "Scholarships:",
+            "Exchange Programs:", "Exchange Program:", "Award:", "Awards:",
+            "Achievement:", "Achievements:", "Prestasi:", "Penghargaan:", "Beasiswa:"])
 
         var parts: [String] = []
-        for s in [projSection, certSection, orgSection, awardSection, combined].compactMap({ $0 }) {
+        for s in [projSection, certSection, orgSection, awardSection,
+                  inlineProj, inlineCert, inlineOrg, inlineAward].compactMap({ $0 }) {
             if !parts.contains(s) { parts.append(s) }
         }
-        if parts.isEmpty { parts.append(slice(text, from: 2500, maxLength: 3000)) }
-        return parts.joined(separator: "\n\n").prefix(3500).description
+        // Fallback: second half of resume (secondary sections usually appear there)
+        if parts.isEmpty {
+            let midpoint = max(0, text.count / 2)
+            parts.append(slice(text, from: midpoint, maxLength: 3500))
+        }
+        return parts.joined(separator: "\n\n").prefix(4000).description
+    }
+
+    // MARK: - Code-based inline-label parser (no LLM, fast)
+    // Handles CVs that use "- Label: content" lines instead of section headers.
+    // Supports both single-item lines ("- Projects: Artha, desc (2025)") and
+    // multi-item lines ("- Projects: Wikan (2025), Lumi (2025), Paintee (2025)").
+
+    // Known inline-label prefixes — used as entry boundaries even when no bullet is present.
+    private static let inlineLabelPrefixes: [String] = [
+        "certifications:", "certification:", "sertifikasi:", "sertifikat:",
+        "projects:", "project:", "proyek:",
+        "organizations:", "organization:", "organisasi:", "kepanitiaan:",
+        "extracurricular:", "volunteer:", "volunteering:", "ukm:",
+        "competitions:", "competition:", "scholarship:", "scholarships:",
+        "exchange programs:", "exchange program:", "award:", "awards:",
+        "achievement:", "achievements:", "prestasi:", "penghargaan:", "beasiswa:",
+        "technical skills:", "interpersonal skills:", "languages:", "skills:",
+        "keahlian:", "kemampuan:"
+    ]
+
+    // Merges PDF line-wrap continuations onto their parent labeled line.
+    // A line is a continuation only when it is NOT a known label and NOT bullet-prefixed.
+    // e.g. "- Projects: Wikan (2025), Klincong\n(2025), Siphiko (2025)"
+    //   → "- Projects: Wikan (2025), Klincong (2025), Siphiko (2025)"
+    private static func mergeInlineLabelContinuations(_ text: String) -> String {
+        let bulletChars = CharacterSet(charactersIn: "-\u{2013}•*·\u{25AA}\u{25B8}")
+        var merged: [String] = []
+        for line in text.components(separatedBy: CharacterSet.newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let cleaned = trimmed.trimmingCharacters(in: bulletChars.union(.whitespaces)).lowercased()
+            let hasBullet = trimmed.unicodeScalars.first.map { bulletChars.contains($0) } ?? false
+            let isKnownLabel = inlineLabelPrefixes.contains(where: { cleaned.hasPrefix($0) })
+            if trimmed.isEmpty || hasBullet || isKnownLabel || merged.isEmpty {
+                merged.append(line)
+            } else {
+                merged[merged.count - 1] += " " + trimmed
+            }
+        }
+        return merged.joined(separator: "\n")
+    }
+
+    @MainActor
+    private static func extractInlineLabels(from text: String) -> ParsedSecondaryContent? {
+        let mergedText = mergeInlineLabelContinuations(text)
+
+        let certPrefixes  = ["Certifications:", "Certification:", "Sertifikasi:", "Sertifikat:"]
+        let projPrefixes  = ["Projects:", "Project:", "Proyek:"]
+        let orgPrefixes   = ["Organizations:", "Organization:", "Organisasi:", "Kepanitiaan:",
+                             "Extracurricular:", "Volunteer:", "Volunteering:", "UKM:"]
+        let awardPrefixes = ["Competitions:", "Competition:", "Scholarship:", "Scholarships:",
+                             "Exchange Programs:", "Exchange Program:", "Award:", "Awards:",
+                             "Achievement:", "Achievements:",
+                             "Prestasi:", "Penghargaan:", "Beasiswa:"]
+
+        // requireContent: true so bare section headers like "Projects:" don't match —
+        // only actual inline entries with content after the colon do.
+        let certLines  = findLabeledLines(from: mergedText, labelPrefixes: certPrefixes,  requireContent: true)
+        let projLines  = findLabeledLines(from: mergedText, labelPrefixes: projPrefixes,  requireContent: true)
+        let orgLines   = findLabeledLines(from: mergedText, labelPrefixes: orgPrefixes,   requireContent: true)
+        let awardLines = findLabeledLines(from: mergedText, labelPrefixes: awardPrefixes, requireContent: true)
+
+        guard certLines != nil || projLines != nil || awardLines != nil else { return nil }
+
+        let certs  = parseInlineLines(certLines,  prefixes: certPrefixes,  parse: parseCertItems)
+        let projs  = parseInlineLines(projLines,  prefixes: projPrefixes,  parse: parseProjItems)
+        let orgs   = parseInlineLines(orgLines,   prefixes: orgPrefixes,   parse: parseOrgItems)
+        let awards = parseInlineLines(awardLines, prefixes: awardPrefixes, parse: parseAwardItems)
+
+        return ParsedSecondaryContent(projects: projs, certifications: certs, organizations: orgs, achievements: awards)
+    }
+
+    // Strips the label prefix from each matched line, then flatMaps parse results.
+    @MainActor
+    private static func parseInlineLines<T>(_ joined: String?, prefixes: [String], parse: (String) -> [T]) -> [T] {
+        guard let joined else { return [] }
+        return joined.components(separatedBy: "\n").flatMap { line -> [T] in
+            let stripped = line
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "-–•*·▪▸").union(.whitespaces))
+            for prefix in prefixes where stripped.lowercased().hasPrefix(prefix.lowercased()) {
+                let content = String(stripped.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                return parse(content)
+            }
+            return []
+        }
+    }
+
+    // Splits "A (2025), B (National, 2024), C (2023)" into individual items.
+    // Detects any parenthesised group "(…)" that contains a 4-digit year anywhere inside.
+    // Handles both "(YYYY)" and "(Location, YYYY)" / "(Level, YYYY)" patterns.
+    // If no year-containing groups are found, returns the whole content as one item.
+    private static func splitInlineItems(_ content: String) -> [String] {
+        var items: [String] = []
+        var itemStart = content.startIndex
+        var idx = content.startIndex
+
+        while idx < content.endIndex {
+            guard content[idx] == "(" else { idx = content.index(after: idx); continue }
+            let openIdx = idx
+
+            // Find matching ")" (first one after the "(" — no nesting support needed for CVs)
+            guard let closeIdx = content[content.index(after: openIdx)...].firstIndex(of: ")") else {
+                idx = content.index(after: idx); continue
+            }
+
+            // Accept only groups that contain a 4-digit year somewhere inside
+            let inside = String(content[content.index(after: openIdx)..<closeIdx])
+            let hasYear = inside
+                .components(separatedBy: CharacterSet(charactersIn: " ,;-"))
+                .contains(where: { $0.count == 4 && $0.allSatisfy(\.isNumber) })
+
+            guard hasYear else { idx = content.index(after: idx); continue }
+
+            // Capture everything from itemStart up to and including the closing ")"
+            let closeAfter = content.index(after: closeIdx)
+            let item = String(content[itemStart..<closeAfter]).trimmingCharacters(in: .whitespaces)
+            if !item.isEmpty { items.append(item) }
+
+            // Skip separator: ", " or " " after ")"
+            var next = closeAfter
+            while next < content.endIndex && (content[next] == "," || content[next] == " ") {
+                next = content.index(after: next)
+            }
+            itemStart = next
+            idx = next
+        }
+        return items.isEmpty ? [content] : items
+    }
+
+    // Returns (textBeforeLastParenGroup, fourDigitYear).
+    // "Data Analytics by Cisco (2024)" → ("Data Analytics by Cisco", "2024")
+    private static func extractTrailingYear(_ text: String) -> (String, String) {
+        guard let closeIdx = text.lastIndex(of: ")"),
+              let openIdx  = text[..<closeIdx].lastIndex(of: "(") else { return (text, "") }
+        let inside = String(text[text.index(after: openIdx)..<closeIdx])
+        let year   = inside
+            .components(separatedBy: CharacterSet(charactersIn: " ,;-"))
+            .first(where: { $0.count == 4 && $0.allSatisfy(\.isNumber) }) ?? ""
+        let before = String(text[..<openIdx]).trimmingCharacters(in: .whitespaces)
+        return (before, year)
+    }
+
+    // "AIML (2025) Cloud Engineer (2023), Frontend Ruangguru (2022)" → [ParsedCert, ...]
+    private static func parseCertItems(_ content: String) -> [ParsedCert] {
+        splitInlineItems(content).compactMap { item in
+            guard !item.isEmpty else { return nil }
+            let (withoutYear, year) = extractTrailingYear(item)
+            var name   = withoutYear
+            var issuer = ""
+            if let byRange = withoutYear.range(of: " by ", options: .caseInsensitive) {
+                name   = String(withoutYear[..<byRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                issuer = String(withoutYear[byRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+            }
+            return ParsedCert(name: name, issuer: issuer, issueDate: year, credentialURL: "")
+        }
+    }
+
+    // "Wikan (2025), Lumi (2025)" or "Artha, a budgeting app (2025)" → [ParsedProj, ...]
+    private static func parseProjItems(_ content: String) -> [ParsedProj] {
+        splitInlineItems(content).compactMap { item in
+            guard !item.isEmpty else { return nil }
+            let (withoutYear, _) = extractTrailingYear(item)
+            var name        = withoutYear
+            var description = ""
+            // Only treat first ", " as name/description separator when there's a single item
+            // (multi-item lines: each item is just a name, so no description splitting)
+            if let commaRange = withoutYear.range(of: ", ") {
+                let candidate = String(withoutYear[..<commaRange.lowerBound])
+                // If the candidate name is short (≤ 40 chars), treat it as name + description
+                if candidate.count <= 40 {
+                    name        = candidate.trimmingCharacters(in: .whitespaces)
+                    description = String(withoutYear[commaRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                }
+            }
+            return ParsedProj(name: name, role: "Personal", techStack: "", highlights: description.isEmpty ? [] : [description])
+        }
+    }
+
+    // "Global Competence (2021), Community Service (2024)" → [ParsedOrg, ...]
+    private static func parseOrgItems(_ content: String) -> [ParsedOrg] {
+        splitInlineItems(content).compactMap { item in
+            guard !item.isEmpty else { return nil }
+            var name  = item
+            var role  = ""
+            var start = ""
+            var end   = ""
+            if let openIdx  = item.lastIndex(of: "("),
+               let closeIdx = item.lastIndex(of: ")"),
+               openIdx < closeIdx {
+                name = String(item[..<openIdx]).trimmingCharacters(in: .whitespaces)
+                let inside = String(item[item.index(after: openIdx)..<closeIdx])
+                let parts  = inside.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                // If inside is a year range like "2022-2023", treat as dates not role
+                if parts.count == 1, parts[0].allSatisfy({ $0.isNumber || $0 == "-" }) {
+                    let yearParts = parts[0].components(separatedBy: "-")
+                    start = yearParts.first ?? ""
+                    end   = yearParts.last ?? ""
+                } else {
+                    role = parts.first ?? ""
+                    if parts.count >= 2 {
+                        let yearParts = (parts.last ?? "").components(separatedBy: "-")
+                        start = yearParts.first?.trimmingCharacters(in: .whitespaces) ?? ""
+                        end   = yearParts.last?.trimmingCharacters(in: .whitespaces) ?? ""
+                    }
+                }
+            }
+            return ParsedOrg(name: name, role: role, startDate: start, endDate: end)
+        }
+    }
+
+    // "1st Winner (2023), Scholarship at X (2024)" → [ParsedAward, ...]
+    private static func parseAwardItems(_ content: String) -> [ParsedAward] {
+        splitInlineItems(content).compactMap { item in
+            guard !item.isEmpty else { return nil }
+            let (withoutYear, year) = extractTrailingYear(item)
+            var title  = withoutYear
+            var issuer = ""
+            for dash in [" – ", " — ", " - "] {
+                if let dashRange = withoutYear.range(of: dash) {
+                    title  = String(withoutYear[..<dashRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    issuer = String(withoutYear[dashRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                    break
+                }
+            }
+            return ParsedAward(title: title, issuer: issuer, date: year, notes: "")
+        }
     }
 
     // MARK: - Map parsed output → domain models (unchanged)
