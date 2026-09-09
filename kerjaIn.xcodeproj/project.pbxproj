@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		45270A3F304EAE3F00AD9E25 /* MLXEmbedders in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A3E304EAE3F00AD9E25 /* MLXEmbedders */; };
+		45270A41304EAE3F00AD9E25 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A40304EAE3F00AD9E25 /* MLXLLM */; };
+		45270A43304EAE3F00AD9E25 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A42304EAE3F00AD9E25 /* MLXLMCommon */; };
+		45270A45304EAE3F00AD9E25 /* MLXMNIST in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A44304EAE3F00AD9E25 /* MLXMNIST */; };
+		45270A47304EAE3F00AD9E25 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A46304EAE3F00AD9E25 /* MLXVLM */; };
+		45270A49304EAE3F00AD9E25 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A48304EAE3F00AD9E25 /* StableDiffusion */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		456DDD2C304A9AD500E6AE62 /* kerjaIn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kerjaIn.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +32,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				45270A47304EAE3F00AD9E25 /* MLXVLM in Frameworks */,
+				45270A49304EAE3F00AD9E25 /* StableDiffusion in Frameworks */,
+				45270A45304EAE3F00AD9E25 /* MLXMNIST in Frameworks */,
+				45270A41304EAE3F00AD9E25 /* MLXLLM in Frameworks */,
+				45270A43304EAE3F00AD9E25 /* MLXLMCommon in Frameworks */,
+				45270A3F304EAE3F00AD9E25 /* MLXEmbedders in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +80,12 @@
 			);
 			name = kerjaIn;
 			packageProductDependencies = (
+				45270A3E304EAE3F00AD9E25 /* MLXEmbedders */,
+				45270A40304EAE3F00AD9E25 /* MLXLLM */,
+				45270A42304EAE3F00AD9E25 /* MLXLMCommon */,
+				45270A44304EAE3F00AD9E25 /* MLXMNIST */,
+				45270A46304EAE3F00AD9E25 /* MLXVLM */,
+				45270A48304EAE3F00AD9E25 /* StableDiffusion */,
 			);
 			productName = kerjaIn;
 			productReference = 456DDD2C304A9AD500E6AE62 /* kerjaIn.app */;
@@ -94,6 +115,9 @@
 			);
 			mainGroup = 456DDD23304A9AD500E6AE62;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 456DDD2D304A9AD500E6AE62 /* Products */;
 			projectDirPath = "";
@@ -255,8 +279,19 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QW8PFJL6C3;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -287,8 +322,19 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QW8PFJL6C3;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -331,6 +377,50 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.29.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		45270A3E304EAE3F00AD9E25 /* MLXEmbedders */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXEmbedders;
+		};
+		45270A40304EAE3F00AD9E25 /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLLM;
+		};
+		45270A42304EAE3F00AD9E25 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLMCommon;
+		};
+		45270A44304EAE3F00AD9E25 /* MLXMNIST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXMNIST;
+		};
+		45270A46304EAE3F00AD9E25 /* MLXVLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXVLM;
+		};
+		45270A48304EAE3F00AD9E25 /* StableDiffusion */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 45270A3D304EAE3F00AD9E25 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = StableDiffusion;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 456DDD24304A9AD500E6AE62 /* Project object */;
 }

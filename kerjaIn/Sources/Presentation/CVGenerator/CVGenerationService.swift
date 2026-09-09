@@ -1,99 +1,54 @@
 import Foundation
-import FoundationModels
 
-// MARK: - @Generable output types for each pipeline stage
-// All types require macOS 26.0+ (Apple Intelligence / FoundationModels framework)
+// MARK: - Codable output types (replaces @Generable from FoundationModels branch)
 
-@available(macOS 26.0, *)
-@Generable(description: "Requirements extracted from a job description")
-struct ExtractedRequirements {
-    @Guide(description: "Must-have hard skills or technologies explicitly required. Ordered by priority: 1) hard technical skills, 2) job-title keywords, 3) required education/certifications, 4) soft skills. 1–5 words each.")
+struct ExtractedRequirements: Codable {
     var mustHaveSkills: [String]
-
-    @Guide(description: "Preferred or nice-to-have skills mentioned in the job description. 1–5 words each.")
     var niceToHaveSkills: [String]
-
-    @Guide(description: "The primary job title being hired for")
     var jobTitle: String
 }
 
-@available(macOS 26.0, *)
-@Generable(description: "How well the candidate's profile covers a requirement")
-enum MatchStatus {
-    case matched  // profile clearly demonstrates this
-    case partial  // profile shows indirect or limited evidence
-    case missing  // profile has no evidence of this
+enum MatchStatus: String, Codable {
+    case matched
+    case partial
+    case missing
 }
 
-@available(macOS 26.0, *)
-@Generable(description: "Match result for one requirement")
-struct RequirementMatchItem {
-    @Guide(description: "The requirement text (1–5 words)")
+struct RequirementMatchItem: Codable {
     var requirement: String
-
-    @Guide(description: "Match status: matched, partial, or missing")
     var status: MatchStatus
 }
 
-@available(macOS 26.0, *)
-@Generable(description: "Full relevance analysis of the candidate profile against the job requirements")
-struct MatchAnalysis {
-    @Guide(description: "Match assessment for each must-have requirement")
+struct MatchAnalysis: Codable {
     var mustHaveResults: [RequirementMatchItem]
-
-    @Guide(description: "Match assessment for each nice-to-have requirement")
     var niceToHaveResults: [RequirementMatchItem]
 }
 
-@available(macOS 26.0, *)
-@Generable(description: "CV content tailored for the target role")
-struct ComposedCVContent {
-    @Guide(description: "A 2–3 sentence professional summary that connects the candidate's experience to this specific role. Only use facts from the candidate's profile.")
+struct ComposedCVContent: Codable {
     var professionalSummary: String
-
-    @Guide(description: "The candidate's most relevant skills for this role (picked from their existing skill list)")
     var highlightedSkills: [String]
 }
 
-@available(macOS 26.0, *)
-@Generable(description: "Type of CV improvement: a weak bullet that needs a measurable impact, or a skill entirely missing from the profile")
-enum GapFeedbackType {
+enum GapFeedbackType: String, Codable {
     case weakBullet
     case missingSkill
 }
 
-@available(macOS 26.0, *)
-@Generable(description: "One specific CV improvement suggestion from the gap review")
-struct GeneratedFeedbackItem {
-    @Guide(description: "Whether this is a weak bullet to strengthen, or a skill missing from the profile")
+struct GeneratedFeedbackItem: Codable {
     var type: GapFeedbackType
-
-    @Guide(description: "Exact reason code — one of: MISSING_METRIC, BANNED_VERB, CLICHE, MISSING_KEYWORD, NO_BACKING")
     var reasonCode: String
-
-    @Guide(description: "Short title describing the issue (max 8 words)")
     var title: String
-
-    @Guide(description: "The exact existing bullet text that is weak. Empty string if type is missingSkill.")
     var existingBullet: String
-
-    @Guide(description: "One precise question to elicit a measurable outcome from the user. Empty string if type is missingSkill.")
     var improvementQuestion: String
-
-    @Guide(description: "Brief explanation of why this missing skill matters for the role. Empty string if type is weakBullet.")
     var skillExplanation: String
 }
 
-@available(macOS 26.0, *)
-@Generable(description: "Gap review output with 2–4 improvement suggestions")
-struct GapReviewOutput {
-    @Guide(description: "List of 2 to 4 concrete, actionable improvement suggestions")
+struct GapReviewOutput: Codable {
     var items: [GeneratedFeedbackItem]
 }
 
 // MARK: - Service
 
-@available(macOS 26.0, *)
 enum CVGenerationService {
 
     // MARK: - Profile → compact text summary
@@ -150,18 +105,22 @@ enum CVGenerationService {
     // MARK: - Step 1: RequirementExtractor
 
     static func extractRequirements(from jd: String) async throws -> ExtractedRequirements {
-        let session = LanguageModelSession(instructions: """
-            The person's locale is en_US. You MUST respond in U.S. English.
-            You are a recruitment specialist. Extract structured job requirements from job descriptions.
-            Be concise — each skill or requirement should be 1–5 words.
-            Only extract requirements that are explicitly stated, not implied.
-            Rank mustHaveSkills by priority: hard technical skills first, then job-title keywords, then required education/certifications, then soft skills. Weight terms that recur across the posting or appear in the job title / requirements section.
-            """)
-        let response = try await session.respond(
-            to: "Extract requirements from this job description:\n\n\(jd)",
-            generating: ExtractedRequirements.self
-        )
-        return response.content
+        let system = "You complete JSON templates by filling in placeholder values."
+        let prompt = """
+            Complete this JSON template using the job description below. Fill every "..." with a real value:
+            {"mustHaveSkills":["...","..."],"niceToHaveSkills":["..."],"jobTitle":"..."}
+
+            mustHaveSkills = explicitly required skills (technical first, soft skills last, 1-5 words each)
+            niceToHaveSkills = preferred/nice-to-have skills
+            jobTitle = exact title from the job posting
+
+            Job description:
+            \(String(jd.prefix(2000)))
+
+            Completed JSON:
+            """
+        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 500)
+        return try MLXInferenceService.decode(ExtractedRequirements.self, from: raw)
     }
 
     // MARK: - Step 2: RelevanceMatcher
@@ -173,18 +132,14 @@ enum CVGenerationService {
         let mustHaveList   = requirements.mustHaveSkills.map   { "• \($0)" }.joined(separator: "\n")
         let niceToHaveList = requirements.niceToHaveSkills.map { "• \($0)" }.joined(separator: "\n")
 
-        let session = LanguageModelSession(instructions: """
-            The person's locale is en_US. You MUST respond in U.S. English.
-            You are a CV reviewer. Compare a candidate profile against job requirements.
-            Criteria:
-            - matched: profile has a clear, direct proof bullet for this requirement
-            - partial: profile shows indirect or limited evidence only
-            - missing: profile has no evidence — never mark matched without a real proof bullet
-            Be strict. Only use data the candidate explicitly provided. Never assume or infer skills not stated.
-            """)
-
+        let system = "You complete JSON templates by filling in placeholder values."
         let prompt = """
-            Candidate Profile:
+            Complete this JSON template. For each requirement, set status to "matched", "partial", or "missing":
+            {"mustHaveResults":[{"requirement":"...","status":"..."}],"niceToHaveResults":[{"requirement":"...","status":"..."}]}
+
+            matched = direct proof in profile | partial = indirect/limited evidence | missing = no evidence
+
+            Candidate profile:
             \(profileSummary)
 
             Must-have requirements:
@@ -193,85 +148,193 @@ enum CVGenerationService {
             Nice-to-have requirements:
             \(niceToHaveList.isEmpty ? "None" : niceToHaveList)
 
-            Analyze how well the candidate matches each requirement.
+            Completed JSON:
             """
-        let response = try await session.respond(to: prompt, generating: MatchAnalysis.self)
-        return response.content
+        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 700)
+        return try MLXInferenceService.decode(MatchAnalysis.self, from: raw)
     }
 
     // MARK: - Step 3: CVComposer
+    // Uses labeled-text output (not JSON) because free-prose summaries contain quotes/commas
+    // that routinely break JSON string parsing in small models.
 
     static func composeCVContent(
         jd: String,
         profileSummary: String,
-        jobTitle: String
+        jobTitle: String,
+        appliedImprovements: String = ""
     ) async throws -> ComposedCVContent {
-        let session = LanguageModelSession(instructions: """
-            The person's locale is en_US. You MUST respond in U.S. English.
-            You are an expert CV writer. Rules you must follow:
-            - Never invent facts. Use only data from the provided profile.
-            - Professional summary: 2–3 sentences. No "I", "me", or "my". Mirror the JD job title where the candidate genuinely held an equivalent role.
-            - Skills: pick only skills the candidate actually has, ordered by JD relevance.
-            - Distribute 8–12 JD keywords naturally across the summary — do not keyword-stuff.
-            - Never use banned openers: Responsible for / Helped / Assisted / Worked on / Involved in / Utilized / Leveraged.
-            - Aim for XYZ structure in any bullets: Accomplished [X] measured by [Y] by doing [Z].
-            """)
+        let system = "You write professional CV content following exact formatting instructions."
+        var prompt = """
+            Write a tailored CV summary for the candidate below.
 
-        let prompt = """
-            Target Role: \(jobTitle)
-
-            Job Description (excerpt):
-            \(String(jd.prefix(600)))
-
-            Candidate Profile:
-            \(profileSummary)
-
-            Compose a tailored professional summary and highlight the most relevant skills.
+            Target role: \(jobTitle)
+            Job description: \(String(jd.prefix(600)))
+            Candidate profile: \(profileSummary)
             """
-        let response = try await session.respond(to: prompt, generating: ComposedCVContent.self)
-        return response.content
+        if !appliedImprovements.isEmpty {
+            prompt += "\nImprovements to incorporate: \(appliedImprovements)"
+        }
+        prompt += """
+
+
+            Rules: 2-3 sentences, no I/me/my, only facts from the profile, avoid weak verbs like Responsible for / Helped / Utilized.
+
+            Respond with EXACTLY these two labeled lines and nothing else:
+            SUMMARY: [your 2-3 sentence summary]
+            SKILLS: [skill1, skill2, skill3, skill4, skill5]
+            """
+        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 400)
+        return Self.parseLabeledCVOutput(raw, fallbackSummary: "")
+    }
+
+    private static func parseLabeledCVOutput(_ text: String, fallbackSummary: String) -> ComposedCVContent {
+        // Known label variants models use
+        let summaryPrefixes = ["PROFESSIONAL SUMMARY:", "PROFESSIONAL_SUMMARY:", "SUMMARY:", "Summary:", "Professional Summary:"]
+        let skillsPrefixes  = ["SKILLS:", "Skills:", "KEY SKILLS:", "Highlighted Skills:"]
+
+        var summary = ""
+        var skills: [String] = []
+        var candidateParagraphs: [String] = []  // non-empty lines that aren't skill lists
+
+        for line in text.components(separatedBy: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty else { continue }
+
+            if let prefix = summaryPrefixes.first(where: { t.uppercased().hasPrefix($0.uppercased()) }) {
+                let s = String(t.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+                if !s.isEmpty { summary = s }
+            } else if let prefix = skillsPrefixes.first(where: { t.uppercased().hasPrefix($0.uppercased()) }) {
+                skills = String(t.dropFirst(prefix.count))
+                    .components(separatedBy: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "[]")) }
+                    .filter { !$0.isEmpty }
+            } else {
+                // Collect as candidate for fallback summary (skip lines that look like skill lists)
+                let commaCount = t.filter { $0 == "," }.count
+                if commaCount < 3 { candidateParagraphs.append(t) }
+            }
+        }
+
+        // Fallback: if no labeled summary found, use the first substantial paragraph
+        if summary.isEmpty {
+            summary = candidateParagraphs
+                .first { $0.count > 40 } ?? fallbackSummary
+        }
+
+        return ComposedCVContent(professionalSummary: summary, highlightedSkills: skills)
+    }
+
+    // MARK: - Client-side relevance filter (no LLM — pure keyword matching)
+
+    /// Scores experiences/projects against JD keywords, picks the top-ranked ones.
+    /// Max 3 experiences and 2 projects — sorted by keyword overlap score, descending.
+    static func filterRelevantIndices(
+        in cvData: CVData,
+        using keywords: [String]
+    ) -> (experiences: [Int], projects: [Int]) {
+        // Split keywords on non-alphanumeric chars so "AI/ML" → ["ai","ml"],
+        // keep tokens ≥2 chars so "AI", "ML", "Go" are included.
+        let tokens = keywords.flatMap { kw in
+            kw.lowercased()
+              .components(separatedBy: CharacterSet.alphanumerics.inverted)
+              .filter { $0.count >= 2 }
+        }
+
+        guard !tokens.isEmpty else {
+            return (Array(cvData.experiences.indices), Array(cvData.projects.indices))
+        }
+
+        func score(_ text: String) -> Int {
+            let lower = text.lowercased()
+            // Count unique tokens that appear in this text (not repeated matches for the same token)
+            return tokens.filter { lower.contains($0) }.count
+        }
+
+        // Score every experience, sort descending, take top 3
+        let expScored = cvData.experiences.indices.map { i -> (Int, Int) in
+            let exp = cvData.experiences[i]
+            let text = ([exp.role, exp.company, exp.description, exp.location] + exp.highlights).joined(separator: " ")
+            return (i, score(text))
+        }
+        let sortedExp = expScored.sorted { $0.1 > $1.1 }
+        let topExp: [Int]
+        if sortedExp.first?.1 == 0 {
+            topExp = Array(cvData.experiences.indices)  // nothing matched → include all
+        } else {
+            topExp = sortedExp.filter { $0.1 > 0 }.prefix(3).map(\.0)
+        }
+
+        // Score every project, sort descending, take top 2
+        let projScored = cvData.projects.indices.map { i -> (Int, Int) in
+            let p = cvData.projects[i]
+            let text = ([p.name, p.role, p.techStack] + p.highlights).joined(separator: " ")
+            return (i, score(text))
+        }
+        let sortedProj = projScored.sorted { $0.1 > $1.1 }
+        let topProj: [Int]
+        if sortedProj.first?.1 == 0 {
+            topProj = Array(cvData.projects.indices)  // nothing matched → include all
+        } else {
+            topProj = sortedProj.filter { $0.1 > 0 }.prefix(2).map(\.0)
+        }
+
+        return (topExp, topProj)
     }
 
     // MARK: - Step 4: GapReviewer
 
     static func reviewGaps(
         matchAnalysis: MatchAnalysis,
-        profileSummary: String
+        profileSummary: String,
+        appliedImprovements: String = ""
     ) async throws -> GapReviewOutput {
         let gaps = (matchAnalysis.mustHaveResults + matchAnalysis.niceToHaveResults)
             .filter { $0.status == .partial || $0.status == .missing }
             .map    { "• \($0.requirement) (\($0.status == .partial ? "partial" : "missing"))" }
             .joined(separator: "\n")
 
-        let session = LanguageModelSession(instructions: """
-            The person's locale is en_US. You MUST respond in U.S. English.
-            You are a CV improvement coach. Identify 2–4 specific, actionable improvements. Set reasonCode to exactly one of:
-            - MISSING_METRIC: bullet describes a duty with no measurable outcome — ask for a number.
-            - BANNED_VERB: bullet opens with Responsible for/Helped/Assisted/Worked on/Involved in/Utilized/Leveraged — ask them to rewrite with a strong action verb.
-            - CLICHE: contains team player/hard worker/detail-oriented/results-oriented/go-getter/synergy — flag and ask to replace with evidence.
-            - MISSING_KEYWORD: JD skill the candidate partially demonstrates but hasn't stated explicitly — suggest adding it.
-            - NO_BACKING: JD skill the candidate truly lacks — do not suggest adding it; explain the gap.
-            Never invent facts. Never suggest skills the candidate hasn't done.
-            """)
+        // Keep only skills + first 3 experience bullets to stay within token budget for a 3B model
+        let compactProfile = profileSummary
+            .components(separatedBy: "\n")
+            .filter { !$0.hasPrefix("    –") || $0.isEmpty }  // drop sub-bullets deeper than one level
+            .prefix(30)
+            .joined(separator: "\n")
 
-        let prompt = """
-            Candidate Profile:
-            \(profileSummary)
+        let system = "You complete JSON templates by filling in placeholder values."
+        var prompt = """
+            Complete this JSON template with 2-4 CV improvements. Fill every "..." with a real value:
+            {"items":[{"type":"weakBullet","reasonCode":"MISSING_METRIC","title":"...","existingBullet":"...","improvementQuestion":"...","skillExplanation":""}]}
 
-            Gaps (partial or missing requirements):
-            \(gaps.isEmpty ? "No significant gaps identified" : gaps)
+            reasonCode must be one of:
+            MISSING_METRIC — bullet has no number/result → ask user for the metric
+            BANNED_VERB — bullet starts with weak verb → improvementQuestion must be ""
+            CLICHE — contains filler phrase → improvementQuestion must be ""
+            MISSING_KEYWORD — partial skill match → ask user to describe where they used it
+            NO_BACKING — skill completely absent → improvementQuestion must be "", skillExplanation explains why it matters
 
-            Identify the most impactful CV improvements for this candidate.
+            type: "weakBullet" for bullet rewrites, "missingSkill" for missing/partial skills
+
+            Candidate profile (skills and experience):
+            \(compactProfile)
+
+            Job requirement gaps:
+            \(gaps.isEmpty ? "None" : gaps)
             """
-        let response = try await session.respond(to: prompt, generating: GapReviewOutput.self)
-        return response.content
+        if !appliedImprovements.isEmpty {
+            prompt += "\n\nSkip these (already addressed): \(appliedImprovements)"
+        }
+        prompt += "\n\nCompleted JSON:"
+        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 800)
+        return try MLXInferenceService.decode(GapReviewOutput.self, from: raw)
     }
 
-    // MARK: - Score Calculation (cv-match-scoring rules)
+    // MARK: - Score Calculation
 
     static func calculateScore(from analysis: MatchAnalysis) -> MatchScoreBreakdown {
-        let wMust:    Double = 3
-        let wNice:    Double = 1
+        let wMust: Double = 3
+        let wNice: Double = 1
 
         func value(_ item: RequirementMatchItem) -> Double {
             switch item.status {
@@ -281,18 +344,18 @@ enum CVGenerationService {
             }
         }
 
-        let mustNum  = analysis.mustHaveResults.reduce(0.0)    { $0 + wMust * value($1) }
-        let niceNum  = analysis.niceToHaveResults.reduce(0.0)  { $0 + wNice * value($1) }
-        let num      = mustNum + niceNum
-        let den      = Double(analysis.mustHaveResults.count) * wMust
-                     + Double(analysis.niceToHaveResults.count) * wNice
-        let score    = den > 0 ? Int((num / den * 100).rounded()) : 0
+        let mustNum = analysis.mustHaveResults.reduce(0.0)   { $0 + wMust * value($1) }
+        let niceNum = analysis.niceToHaveResults.reduce(0.0) { $0 + wNice * value($1) }
+        let num     = mustNum + niceNum
+        let den     = Double(analysis.mustHaveResults.count) * wMust
+                    + Double(analysis.niceToHaveResults.count) * wNice
+        let score   = den > 0 ? Int((num / den * 100).rounded()) : 0
 
         let missingMust = analysis.mustHaveResults.filter { $0.status == .missing }.map(\.requirement)
         let partialMust = analysis.mustHaveResults.filter { $0.status == .partial }.map(\.requirement)
 
         let gate: ReadinessGate
-        if !missingMust.isEmpty     { gate = .notQualified(missingSkills: missingMust) }
+        if !missingMust.isEmpty      { gate = .notQualified(missingSkills: missingMust) }
         else if !partialMust.isEmpty { gate = .needsWork(partialSkills: partialMust) }
         else                         { gate = .ready }
 
@@ -315,55 +378,73 @@ enum CVGenerationService {
 
     static func toFeedbackItems(_ output: GapReviewOutput) -> [FeedbackItem] {
         output.items.enumerated().map { idx, item in
-            let (tag, tagLabel, placeholder, helperText) = Self.feedbackMeta(for: item)
+            let (tag, tagLabel, question, placeholder, helperText, canApply) = Self.feedbackMeta(for: item)
             return FeedbackItem(
                 id:               "fb-\(idx + 1)",
                 tag:              tag,
                 tagLabel:         tagLabel,
                 title:            item.title,
                 bulletQuote:      item.existingBullet.isEmpty ? "" : "\"\(item.existingBullet)\"",
-                question:         item.improvementQuestion,
+                question:         question,
                 inputPlaceholder: placeholder,
                 helperText:       helperText,
                 missingDesc:      item.skillExplanation,
-                boldPhrases:      []
+                boldPhrases:      [],
+                canApply:         canApply
             )
         }
     }
 
-    private static func feedbackMeta(for item: GeneratedFeedbackItem) -> (FeedbackTag, String, String, String) {
+    // Returns (tag, tagLabel, question, inputPlaceholder, helperText, canApply)
+    private static func feedbackMeta(for item: GeneratedFeedbackItem)
+        -> (FeedbackTag, String, String, String, String, Bool)
+    {
         switch item.reasonCode.uppercased() {
         case "MISSING_METRIC":
             return (.missingMetric,
                     "Missing metric · add a number",
+                    item.improvementQuestion,
                     "e.g. reduced load time by 40%, served 10k users",
-                    "The agent weaves your number in — it won't make up figures.")
+                    "The agent weaves your number in — it won't make up figures.",
+                    true)
         case "BANNED_VERB":
+            // Model auto-rewrites the opener — user just needs to confirm with Apply, no input needed.
             return (.bannedVerb,
-                    "Banned verb · rewrite opener",
-                    "e.g. Built, Designed, Shipped, Reduced, Led",
-                    "Start with a strong past-tense action verb — it stops the recruiter's eye.")
+                    "Banned verb · auto-fix",
+                    "",
+                    "",
+                    "",
+                    true)
         case "CLICHE":
+            // Model auto-removes the cliché — user just confirms with Apply.
             return (.cliche,
-                    "Cliché · replace with evidence",
-                    "e.g. what you actually did, with a result",
-                    "Replace the filler phrase with a concrete example or number.")
+                    "Cliché · auto-fix",
+                    "",
+                    "",
+                    "",
+                    true)
         case "NO_BACKING":
             return (.missingSkill,
                     "No backing · can't be added",
                     "",
-                    "This skill is missing from your profile. Gain real experience first, then add it.")
+                    "",
+                    "This skill is missing from your profile. Gain real experience first, then add it.",
+                    false)   // purely informational, no Apply
         case "MISSING_KEYWORD":
             return (.missingSkill,
                     "Missing keyword · partially there",
+                    item.improvementQuestion,
                     "Describe where you used this skill",
-                    "You have partial backing — add a real bullet to your profile to strengthen the match.")
+                    "The agent weaves your context into the summary.",
+                    true)
         default:
             let isWeak = item.type == .weakBullet
             return (isWeak ? .weakBullet : .missingSkill,
-                    isWeak ? "Weak bullet · missing impact" : "Missing skill · can't be filled in",
+                    isWeak ? "Weak bullet · missing impact" : "Missing skill",
+                    item.improvementQuestion,
                     "Describe the outcome…",
-                    "The agent weaves your answer in — it won't make up numbers.")
+                    "The agent weaves your answer in — it won't make up numbers.",
+                    isWeak)
         }
     }
 }

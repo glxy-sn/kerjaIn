@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Observation
-import FoundationModels
 
 // MARK: - Match Scoring
 
@@ -66,6 +65,7 @@ struct FeedbackItem: Identifiable {
     let helperText: String
     let missingDesc: String
     let boldPhrases: [String]
+    var canApply: Bool = true   // false only for NO_BACKING (purely informational)
     var state: FeedbackState = .pending
     var inputText: String = ""
 }
@@ -104,6 +104,29 @@ final class CVGeneratorViewModel {
     var feedbackItems: [FeedbackItem] = []
     var scoreBreakdown: MatchScoreBreakdown? = nil
     var lastGeneratedJD: String = ""
+
+    // Indices of experiences/projects selected by the CVComposer as relevant to the JD
+    var selectedExperienceIndices: [Int] = []
+    var selectedProjectIndices: [Int] = []
+    var isLivePipeline: Bool = false
+    var lastPipelineError: String = ""
+
+    // CVData filtered to only relevant experiences/projects for the preview
+    var filteredCVData: CVData {
+        guard generationDone else { return cvData }
+        var filtered = cvData
+        if !selectedExperienceIndices.isEmpty {
+            filtered.experiences = selectedExperienceIndices
+                .filter { $0 < cvData.experiences.count }
+                .map    { cvData.experiences[$0] }
+        }
+        if !selectedProjectIndices.isEmpty {
+            filtered.projects = selectedProjectIndices
+                .filter { $0 < cvData.projects.count }
+                .map    { cvData.projects[$0] }
+        }
+        return filtered
+    }
 
     var canGenerate: Bool {
         !jobDescription.isEmpty && (!generationDone || jobDescription != lastGeneratedJD)
@@ -166,31 +189,47 @@ final class CVGeneratorViewModel {
     // MARK: - Private
 
     private func runGeneration() {
+        // Capture ALL resolved suggestions so GapReviewer won't repeat them
+        let resolvedTitles = feedbackItems
+            .filter { $0.state == .applied || $0.state == .skipped }
+            .map    { $0.title }
+
+        // Capture applied items for CVComposer: include user's text OR "[auto-fix]" marker for items
+        // where the model handles the rewrite itself (BANNED_VERB, CLICHE — no user input needed).
+        let appliedAnswers = feedbackItems
+            .filter { $0.state == .applied }
+            .map { item -> String in
+                let input = item.inputText.trimmingCharacters(in: .whitespaces)
+                return "• \(item.title): \(input.isEmpty ? "[auto-fix — rewrite this bullet]" : input)"
+            }
+            .joined(separator: "\n")
+
         isGenerating = true
         generationDone = false
         feedbackItems = []
         scoreBreakdown = nil
+        selectedExperienceIndices = []
+        selectedProjectIndices = []
         for i in steps.indices { steps[i].state = .waiting }
+
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if #available(macOS 26.0, *) {
-                let model = SystemLanguageModel.default
-                if case .available = model.availability {
-                    await self.runRealPipeline()
-                    return
-                }
+            let service = MLXInferenceService.shared
+            if !service.isReady {
+                await service.loadSelectedModel()
             }
-            await self.runMockPipeline()
+            if service.isReady {
+                self.isLivePipeline = true
+                await self.runRealPipeline(appliedAnswers: appliedAnswers, resolvedTitles: resolvedTitles)
+            } else {
+                self.isLivePipeline = false
+                await self.runMockPipeline(resolvedTitles: resolvedTitles)
+            }
         }
     }
 
     @MainActor
-    private func runRealPipeline() async {
-        guard #available(macOS 26.0, *) else {
-            await runMockPipeline()
-            return
-        }
-
+    private func runRealPipeline(appliedAnswers: String = "", resolvedTitles: [String] = []) async {
         let jd      = jobDescription
         let profile = CVGenerationService.profileSummary(cvData)
 
@@ -208,21 +247,34 @@ final class CVGeneratorViewModel {
             )
             steps[1].state = .done
 
-            // Step 3 — CVComposer
+            // Client-side filtering: experiences/projects that match JD keywords
+            let matchedKeywords = (analysis.mustHaveResults + analysis.niceToHaveResults)
+                .filter { $0.status != .missing }
+                .map    { $0.requirement }
+            let filtered = CVGenerationService.filterRelevantIndices(in: cvData, using: matchedKeywords)
+            selectedExperienceIndices = filtered.experiences
+            selectedProjectIndices    = filtered.projects
+
+            // Step 3 — CVComposer (incorporates user's typed answers if any)
             steps[2].state = .running
             let composed = try await CVGenerationService.composeCVContent(
                 jd: jd,
                 profileSummary: profile,
-                jobTitle: requirements.jobTitle
+                jobTitle: requirements.jobTitle,
+                appliedImprovements: appliedAnswers
             )
             cvData.profile.summary = composed.professionalSummary
             steps[2].state = .done
 
-            // Step 4 — GapReviewer
+            // Step 4 — GapReviewer (excludes all resolved suggestions)
             steps[3].state = .running
+            let alreadyAddressed = resolvedTitles.isEmpty
+                ? appliedAnswers
+                : resolvedTitles.map { "• \($0)" }.joined(separator: "\n")
             let gaps = try await CVGenerationService.reviewGaps(
                 matchAnalysis: analysis,
-                profileSummary: profile
+                profileSummary: profile,
+                appliedImprovements: alreadyAddressed
             )
             steps[3].state = .done
 
@@ -233,24 +285,29 @@ final class CVGeneratorViewModel {
             isGenerating    = false
             generationDone  = true
         } catch {
-            // LLM error — fall back to mock so the user still sees a result
+            lastPipelineError = error.localizedDescription
+            isLivePipeline = false
             for i in steps.indices where steps[i].state != .done { steps[i].state = .done }
-            await runMockPipeline()
+            await runMockPipeline(resolvedTitles: resolvedTitles)
         }
     }
 
     @MainActor
-    private func runMockPipeline() async {
+    private func runMockPipeline(resolvedTitles: [String] = []) async {
         for i in steps.indices {
             steps[i].state = .running
-            try? await Task.sleep(nanoseconds: 1_300_000_000)
+            try? await Task.sleep(nanoseconds: 800_000_000)
             steps[i].state = .done
         }
         lastGeneratedJD = jobDescription
-        feedbackItems   = CVGeneratorViewModel.makeMockFeedback()
-        scoreBreakdown  = CVGeneratorViewModel.makeMockScore()
-        isGenerating    = false
-        generationDone  = true
+        // Filter out suggestions the user already resolved in the previous run
+        let allMock = CVGeneratorViewModel.makeMockFeedback()
+        feedbackItems = allMock.filter { item in
+            !resolvedTitles.contains(item.title)
+        }
+        scoreBreakdown = CVGeneratorViewModel.makeMockScore()
+        isGenerating   = false
+        generationDone = true
     }
 
     private static func makeMockScore() -> MatchScoreBreakdown {

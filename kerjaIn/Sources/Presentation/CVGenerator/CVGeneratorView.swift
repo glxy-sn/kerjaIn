@@ -41,6 +41,9 @@ private struct LeftPanel: View {
         @Bindable var viewModel = viewModel
         ScrollView {
             VStack(spacing: 14) {
+                // Model picker
+                ModelPickerCard()
+
                 // Job description input
                 JDCard(text: $viewModel.jobDescription)
 
@@ -84,7 +87,12 @@ private struct LeftPanel: View {
                 .disabled(!viewModel.canGenerate || viewModel.isGenerating)
 
                 // Pipeline steps
-                PipelineCard(steps: viewModel.steps)
+                PipelineCard(
+                    steps: viewModel.steps,
+                    isLive: viewModel.isLivePipeline && viewModel.generationDone,
+                    modelName: MLXInferenceService.shared.selectedModel.displayName,
+                    errorMessage: viewModel.lastPipelineError
+                )
 
                 // Improve CV section — appears after first generation
                 if viewModel.generationDone {
@@ -144,6 +152,9 @@ private struct JDCard: View {
 
 private struct PipelineCard: View {
     let steps: [AgentStep]
+    var isLive: Bool = false
+    var modelName: String = ""
+    var errorMessage: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -177,6 +188,30 @@ private struct PipelineCard: View {
                         .padding(.horizontal, 18)
                 }
             }
+
+            Divider()
+
+            // Mode indicator — shows whether a real model or demo data was used
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(isLive ? Color.statusOffer : Color.inkTertiary)
+                        .frame(width: 6, height: 6)
+                    Text(isLive ? "Live · \(modelName)" : "Demo mode — load a model to generate real output")
+                        .font(.system(size: 11))
+                        .foregroundStyle(isLive ? Color.statusOffer : Color.inkTertiary)
+                }
+                if !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(.system(size: 10).monospaced())
+                        .foregroundStyle(Color.statusRejected)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(4)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
         }
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -679,7 +714,7 @@ private struct FeedbackItemCard: View {
 
             // Footer: action buttons (left) + carousel nav (right)
             HStack(spacing: 10) {
-                if item.tag != .missingSkill {
+                if item.canApply {
                     Button("Apply") { onApply() }
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
@@ -742,10 +777,10 @@ private struct FeedbackItemCard: View {
     private var tagChip: some View {
         Text(item.tagLabel)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(item.tag != .missingSkill ? Color.statusInterview : Color.statusRejected)
+            .foregroundStyle(item.canApply ? Color.statusInterview : Color.statusRejected)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
-            .background(item.tag != .missingSkill ? Color.statusInterviewBg : Color.statusRejectedBg)
+            .background(item.canApply ? Color.statusInterviewBg : Color.statusRejectedBg)
             .clipShape(Capsule())
     }
 
@@ -791,7 +826,7 @@ private struct RightPanel: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         VStack(spacing: 12) {
-            CVPreviewCard(cvData: viewModel.cvData, forceEmpty: !viewModel.generationDone)
+            CVPreviewCard(cvData: viewModel.filteredCVData, forceEmpty: !viewModel.generationDone)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if viewModel.generationDone {
@@ -943,5 +978,113 @@ private struct SheetPrimaryStyle: ButtonStyle {
             .background(Color.inkPrimary)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .opacity(configuration.isPressed ? 0.75 : 1)
+    }
+}
+
+// MARK: - Model Picker Card
+
+private struct ModelPickerCard: View {
+    @State private var service = MLXInferenceService.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "cpu")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.inkSecondary)
+                Text("Model")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.inkPrimary)
+                Spacer()
+                statusChip
+            }
+
+            Picker("", selection: Binding(
+                get: { service.selectedModel },
+                set: { service.switchModel(to: $0) }
+            )) {
+                ForEach(MLXModel.allCases) { model in
+                    Text("\(model.displayName)  \(model.sizeLabel)")
+                        .tag(model)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+
+            if !service.isReady {
+                Button {
+                    Task { await service.loadSelectedModel() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if case .downloading = service.loadState {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else if case .loading = service.loadState {
+                            ProgressView()
+                                .controlSize(.mini)
+                        }
+                        Text(loadButtonLabel)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background(Color.statusApplied.opacity(0.1))
+                    .foregroundStyle(Color.statusApplied)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.statusApplied.opacity(0.3), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoading)
+
+                if case .downloading(let p) = service.loadState {
+                    ProgressView(value: p)
+                        .tint(Color.statusApplied)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.appSeparator, lineWidth: 1))
+        .shadow(color: .black.opacity(0.04), radius: 1)
+        .shadow(color: .black.opacity(0.04), radius: 18, y: 5)
+    }
+
+    private var isLoading: Bool {
+        switch service.loadState {
+        case .downloading, .loading: return true
+        default: return false
+        }
+    }
+
+    private var loadButtonLabel: String {
+        switch service.loadState {
+        case .downloading(let p): return "Downloading \(Int(p * 100))%…"
+        case .loading:            return "Loading into memory…"
+        case .failed:             return "Retry"
+        default:                  return "Load Model"
+        }
+    }
+
+    private var statusChip: some View {
+        let (label, color, bg): (String, Color, Color) = {
+            switch service.loadState {
+            case .ready:
+                return (service.selectedModel.displayName, Color.statusOffer, Color.statusOfferBg)
+            case .downloading, .loading:
+                return ("Loading…", Color.statusInterview, Color.statusInterviewBg)
+            case .failed:
+                return ("Error", Color.statusRejected, Color.statusRejectedBg)
+            default:
+                return ("Not loaded", Color.inkTertiary, Color.hoverBackground)
+            }
+        }()
+        return Text(label)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(bg)
+            .clipShape(Capsule())
     }
 }

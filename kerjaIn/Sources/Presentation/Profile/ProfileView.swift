@@ -44,7 +44,11 @@ struct ProfileView: View {
                     }
                     .frame(maxWidth: .infinity)
 
-                    DocumentsCard(isImporting: viewModel.isImporting) { url in
+                    DocumentsCard(
+                        isImporting: viewModel.isImporting,
+                        importProgress: viewModel.importProgress,
+                        importStepLabel: viewModel.importStepLabel
+                    ) { url in
                         importCVFile(from: url, viewModel: viewModel)
                     }
                     .frame(width: 280)
@@ -87,11 +91,6 @@ struct ProfileView: View {
     // Called by DocumentsCard after NSOpenPanel closes — text extracted synchronously
     // while the file-access grant from NSOpenPanel is still valid.
     private func importCVFile(from url: URL, viewModel: ProfileViewModel) {
-        guard #available(macOS 26.0, *) else {
-            viewModel.importError = "CV import requires macOS 26 or later (Apple Intelligence)."
-            viewModel.showImportError = true
-            return
-        }
         guard let text = CVImportService.extractText(from: url) else {
             viewModel.importError = "Could not read the file. Make sure it is a text-based PDF (not a scanned image) or a plain .txt file."
             viewModel.showImportError = true
@@ -935,6 +934,8 @@ private struct SkillFlowLayout: Layout {
 
 private struct DocumentsCard: View {
     let isImporting: Bool
+    var importProgress: Double = 0
+    var importStepLabel: String = ""
     let onImport: (URL) -> Void
 
     @State private var uploadedFileName: String? = nil
@@ -995,11 +996,13 @@ private struct DocumentsCard: View {
                                 .foregroundStyle(Color.inkPrimary)
                                 .lineLimit(1)
                             if isImporting {
-                                HStack(spacing: 5) {
-                                    ProgressView().scaleEffect(0.55)
-                                    Text("Parsing with AI…")
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(importStepLabel.isEmpty ? "Parsing with AI…" : importStepLabel)
                                         .font(.system(size: 11))
                                         .foregroundStyle(Color.inkTertiary)
+                                    ProgressView(value: importProgress, total: 1.0)
+                                        .progressViewStyle(.linear)
+                                        .tint(Color.inkPrimary)
                                 }
                             } else {
                                 Text("Ready to import")

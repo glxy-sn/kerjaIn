@@ -29,6 +29,8 @@ final class ProfileViewModel {
 
     // CV Import state
     var isImporting = false
+    var importProgress: Double = 0
+    var importStepLabel: String = ""
     var importError: String? = nil
     var showImportError = false
     var showImportConfirm = false
@@ -200,13 +202,17 @@ final class ProfileViewModel {
 
     // Called from View after synchronous text extraction (while NSOpenPanel access is still valid)
     func importCV(fromText text: String) {
-        guard #available(macOS 26.0, *) else { return }
         isImporting = true
+        importProgress = 0
+        importStepLabel = ""
         Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.isImporting = false }
             do {
-                let (basic, sections) = try await CVImportService.parseCV(from: text)
+                let (basic, sections) = try await CVImportService.parseCV(from: text) { [weak self] progress, label in
+                    self?.importProgress = progress
+                    self?.importStepLabel = label
+                }
                 let (newProfile, newCVData) = CVImportService.apply(
                     basic: basic, sections: sections,
                     preservingPhoto: self.profile.photoData
