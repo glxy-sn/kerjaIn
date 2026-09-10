@@ -142,23 +142,29 @@ final class MLXInferenceService {
             instructions: system,
             generateParameters: GenerateParameters(maxTokens: maxTokens, temperature: 0.1)
         )
-        return try await session.respond(to: finalPrompt)
+        let raw = try await session.respond(to: finalPrompt)
+        return MLXInferenceService.stripThinkingBlocks(raw)
     }
 
     // MARK: - JSON helpers
 
+    static func stripThinkingBlocks(_ text: String) -> String {
+        var s = text
+        while let open = s.range(of: "<think>", options: .caseInsensitive),
+              let close = s.range(of: "</think>", options: .caseInsensitive),
+              open.lowerBound <= close.lowerBound {
+            s.removeSubrange(open.lowerBound..<close.upperBound)
+        }
+        // If model started a <think> block but hit max tokens before closing it, drop the tail
+        if let orphanOpen = s.range(of: "<think>", options: .caseInsensitive) {
+            s = String(s[..<orphanOpen.lowerBound])
+        }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     // Strips thinking blocks, markdown fences, then extracts the outermost balanced JSON object.
     static func extractJSON(from text: String) -> String {
-        var s = text
-
-        // Strip Qwen3 / o1-style thinking blocks: <think>…</think>
-        var stripped = s
-        while let open = stripped.range(of: "<think>", options: .caseInsensitive),
-              let close = stripped.range(of: "</think>", options: .caseInsensitive),
-              open.lowerBound <= close.lowerBound {
-            stripped.removeSubrange(open.lowerBound..<close.upperBound)
-        }
-        s = stripped
+        var s = stripThinkingBlocks(text)
 
         // Strip markdown fences
         for fence in ["```json", "```"] { s = s.replacingOccurrences(of: fence, with: "") }

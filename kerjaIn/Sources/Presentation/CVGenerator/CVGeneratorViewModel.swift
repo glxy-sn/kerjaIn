@@ -68,6 +68,7 @@ struct FeedbackItem: Identifiable {
     let tagLabel: String
     let title: String
     let bulletQuote: String
+    let rawBullet: String       // original bullet text without quote decoration — used for find-and-replace
     let question: String
     let inputPlaceholder: String
     let helperText: String
@@ -112,6 +113,14 @@ final class CVGeneratorViewModel {
     var feedbackItems: [FeedbackItem] = []
     var scoreBreakdown: MatchScoreBreakdown? = nil
     var lastGeneratedJD: String = ""
+    var cvFullyOptimized: Bool = false
+
+    // Tracks how many rounds of feedback the user has completed for the current JD.
+    // GapReviewer is skipped after 2 rounds to prevent infinite suggestion loops.
+    private var feedbackRoundsCompleted: Int = 0
+    // Accumulates rawBullet text of every resolved item — passed to GapReviewer
+    // so it never re-flags a bullet that was already addressed.
+    private var allAddressedRawBullets: [String] = []
 
     // Indices of experiences/projects selected by the CVComposer as relevant to the JD
     var selectedExperienceIndices: [Int] = []
@@ -170,7 +179,19 @@ final class CVGeneratorViewModel {
     }
 
     var canGenerate: Bool {
-        !jobDescription.isEmpty && (!generationDone || jobDescription != lastGeneratedJD)
+        !jobDescription.isEmpty && (
+            !generationDone ||
+            jobDescription != lastGeneratedJD ||
+            feedbackItems.contains { $0.state == .applied }
+        )
+    }
+
+    var generateButtonLabel: String {
+        if isGenerating { return "Generating..." }
+        let n = feedbackItems.filter { $0.state == .applied }.count
+        if n > 0 { return "Apply \(n) Change\(n == 1 ? "" : "s") & Regenerate" }
+        if generationDone { return "Regenerate CV" }
+        return "Generate CV"
     }
 
     var pendingFeedback: [FeedbackItem] {
@@ -230,23 +251,41 @@ final class CVGeneratorViewModel {
     // MARK: - Private
 
     private func runGeneration() {
-        // Capture ALL resolved suggestions so GapReviewer won't repeat them
-        let resolvedTitles = feedbackItems
-            .filter { $0.state == .applied || $0.state == .skipped }
-            .map    { $0.title }
+        // New JD → reset per-JD feedback tracking
+        if lastGeneratedJD != jobDescription {
+            feedbackRoundsCompleted = 0
+            allAddressedRawBullets = []
+            cvFullyOptimized = false
+        }
 
-        // Capture applied items for CVComposer: include user's text OR "[auto-fix]" marker for items
-        // where the model handles the rewrite itself (BANNED_VERB, CLICHE — no user input needed).
-        let appliedAnswers = feedbackItems
-            .filter { $0.state == .applied }
+        // Accumulate raw bullet text of every resolved item into the persistent list
+        let newlyResolved = feedbackItems
+            .filter { $0.state == .applied || $0.state == .skipped }
+        let newBullets = newlyResolved.compactMap { $0.rawBullet.isEmpty ? nil : $0.rawBullet }
+        allAddressedRawBullets.append(contentsOf: newBullets)
+
+        let resolvedTitles = newlyResolved.map(\.title)
+
+        // Applied items that have a bullet to rewrite
+        let appliedItems = feedbackItems
+            .filter { $0.state == .applied && !$0.rawBullet.isEmpty }
+
+        // Text summary of applied answers for the CVComposer summary context
+        let appliedAnswers = appliedItems
             .map { item -> String in
                 let input = item.inputText.trimmingCharacters(in: .whitespaces)
-                return "• \(item.title): \(input.isEmpty ? "[auto-fix — rewrite this bullet]" : input)"
+                return "• \(item.title): \(input.isEmpty ? "[auto-fix]" : input)"
             }
             .joined(separator: "\n")
 
+        // Increment round counter when user resolved items; skip GapReviewer after 2 rounds
+        if !resolvedTitles.isEmpty { feedbackRoundsCompleted += 1 }
+        let skipGapReview = feedbackRoundsCompleted >= 2
+        let addressedBullets = allAddressedRawBullets  // snapshot for async closure
+
         isGenerating = true
         generationDone = false
+        cvFullyOptimized = false
         feedbackItems = []
         scoreBreakdown = nil
         selectedExperienceIndices = []
@@ -262,7 +301,13 @@ final class CVGeneratorViewModel {
             }
             if service.isReady {
                 self.isLivePipeline = true
-                await self.runRealPipeline(appliedAnswers: appliedAnswers, resolvedTitles: resolvedTitles)
+                await self.runRealPipeline(
+                    appliedAnswers: appliedAnswers,
+                    resolvedTitles: resolvedTitles,
+                    appliedItems: appliedItems,
+                    skipGapReview: skipGapReview,
+                    addressedBullets: addressedBullets
+                )
             } else {
                 self.isLivePipeline = false
                 await self.runMockPipeline(resolvedTitles: resolvedTitles)
@@ -271,7 +316,13 @@ final class CVGeneratorViewModel {
     }
 
     @MainActor
-    private func runRealPipeline(appliedAnswers: String = "", resolvedTitles: [String] = []) async {
+    private func runRealPipeline(
+        appliedAnswers: String = "",
+        resolvedTitles: [String] = [],
+        appliedItems: [FeedbackItem] = [],
+        skipGapReview: Bool = false,
+        addressedBullets: [String] = []
+    ) async {
         let jd      = jobDescription
         let profile = CVGenerationService.profileSummary(cvData)
 
@@ -309,24 +360,46 @@ final class CVGeneratorViewModel {
             if !composed.highlightedSkills.isEmpty {
                 generatedSkills = composed.highlightedSkills
             }
+            // Rewrite specific bullets for every applied feedback item that has a bullet
+            for item in appliedItems {
+                if let rewritten = try? await CVGenerationService.rewriteBullet(
+                    original: item.rawBullet,
+                    userContext: item.inputText,
+                    jd: jd
+                ), !rewritten.isEmpty {
+                    applyBulletRewrite(original: item.rawBullet, rewritten: rewritten)
+                }
+            }
             steps[2].state = .done
 
-            // Step 4 — GapReviewer (excludes all resolved suggestions)
-            steps[3].state = .running
-            let alreadyAddressed = resolvedTitles.isEmpty
-                ? appliedAnswers
-                : resolvedTitles.map { "• \($0)" }.joined(separator: "\n")
-            let gaps = try await CVGenerationService.reviewGaps(
-                matchAnalysis: analysis,
-                profileSummary: profile,
-                appliedImprovements: alreadyAddressed
-            )
-            steps[3].state = .done
+            // Step 4 — GapReviewer (skipped after 2 feedback rounds to prevent infinite loop)
+            if skipGapReview {
+                steps[3].state = .done
+                cvFullyOptimized = true
+            } else {
+                steps[3].state = .running
+                // Build context: resolved titles + all bullets already addressed across rounds
+                var addressedParts: [String] = []
+                if !resolvedTitles.isEmpty {
+                    addressedParts.append(resolvedTitles.map { "• \($0)" }.joined(separator: "\n"))
+                }
+                if !addressedBullets.isEmpty {
+                    addressedParts.append("Bullets already rewritten — do NOT flag these again:\n• " +
+                        addressedBullets.joined(separator: "\n• "))
+                }
+                let alreadyAddressed = addressedParts.isEmpty ? appliedAnswers : addressedParts.joined(separator: "\n\n")
+                let gaps = try await CVGenerationService.reviewGaps(
+                    matchAnalysis: analysis,
+                    profileSummary: profile,
+                    appliedImprovements: alreadyAddressed
+                )
+                steps[3].state = .done
+                feedbackItems = CVGenerationService.toFeedbackItems(gaps)
+            }
 
             // Finalise
             lastGeneratedJD = jd
             scoreBreakdown  = CVGenerationService.calculateScore(from: analysis)
-            feedbackItems   = CVGenerationService.toFeedbackItems(gaps)
             isGenerating    = false
             generationDone  = true
         } catch {
@@ -334,6 +407,29 @@ final class CVGeneratorViewModel {
             isLivePipeline = false
             for i in steps.indices where steps[i].state != .done { steps[i].state = .done }
             await runMockPipeline(resolvedTitles: resolvedTitles)
+        }
+    }
+
+    // Find the original bullet in cvData (experiences then projects) and replace it in-place.
+    // Called after the model rewrites a bullet so the updated text persists to the next generation.
+    private func applyBulletRewrite(original: String, rewritten: String) {
+        let orig = original.trimmingCharacters(in: .whitespaces)
+        guard !orig.isEmpty else { return }
+        for i in cvData.experiences.indices {
+            for j in cvData.experiences[i].highlights.indices {
+                if cvData.experiences[i].highlights[j].trimmingCharacters(in: .whitespaces) == orig {
+                    cvData.experiences[i].highlights[j] = rewritten
+                    return
+                }
+            }
+        }
+        for i in cvData.projects.indices {
+            for j in cvData.projects[i].highlights.indices {
+                if cvData.projects[i].highlights[j].trimmingCharacters(in: .whitespaces) == orig {
+                    cvData.projects[i].highlights[j] = rewritten
+                    return
+                }
+            }
         }
     }
 
@@ -378,33 +474,36 @@ final class CVGeneratorViewModel {
             FeedbackItem(
                 id: "fb-1",
                 tag: .weakBullet,
-                tagLabel: "Weak bullet · missing impact",
-                title: "This experience has no measurable result",
+                tagLabel: "Missing metric · add a number",
+                title: "This bullet is missing a measurable result",
                 bulletQuote: "\"Migrated 12 screens from UIKit to SwiftUI.\"",
-                question: "What was the measurable outcome?",
-                inputPlaceholder: "e.g. cut UI code by 30%, dropped load time to 0.4s",
-                helperText: "The agent weaves your answer into the bullet — it won't make up a number.",
+                rawBullet: "Migrated 12 screens from UIKit to SwiftUI.",
+                question: "How many lines of code changed, or what % load time improvement?",
+                inputPlaceholder: "e.g. 30% less code, dropped load time to 0.4s",
+                helperText: "The agent rewrites the bullet with your number — it won't make one up.",
                 missingDesc: "",
                 boldPhrases: []
             ),
             FeedbackItem(
                 id: "fb-2",
                 tag: .weakBullet,
-                tagLabel: "Weak bullet · vague scope",
-                title: "This bullet describes a task, not a contribution",
+                tagLabel: "Missing metric · add a number",
+                title: "This bullet has no scale or outcome",
                 bulletQuote: "\"Maintained legacy UIKit codebase.\"",
-                question: "What did that maintenance achieve, and at what scale?",
-                inputPlaceholder: "e.g. kept 40k-line app stable across 3 iOS releases",
-                helperText: "Turns a responsibility into a result a recruiter can weigh.",
+                rawBullet: "Maintained legacy UIKit codebase.",
+                question: "How many lines of code, users affected, or iOS releases spanned?",
+                inputPlaceholder: "e.g. 40k-line codebase across 3 iOS releases",
+                helperText: "The agent rewrites the bullet with your number — it won't make one up.",
                 missingDesc: "",
                 boldPhrases: []
             ),
             FeedbackItem(
                 id: "fb-3",
                 tag: .missingSkill,
-                tagLabel: "Missing skill · can't be filled in",
+                tagLabel: "Missing skill · can't be added",
                 title: "",
                 bulletQuote: "",
+                rawBullet: "",
                 question: "",
                 inputPlaceholder: "",
                 helperText: "",

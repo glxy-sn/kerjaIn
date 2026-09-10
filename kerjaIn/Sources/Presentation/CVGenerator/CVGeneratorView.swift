@@ -61,7 +61,7 @@ private struct LeftPanel: View {
                     .buttonStyle(.plain)
                 }
 
-                // Generate CV button — disabled once generated unless JD changes
+                // Generate / Regenerate CV button
                 Button {
                     viewModel.generateCV()
                 } label: {
@@ -71,7 +71,7 @@ private struct LeftPanel: View {
                                 .controlSize(.small)
                                 .colorScheme(.dark)
                         }
-                        Text(viewModel.isGenerating ? "Generating..." : "Generate CV")
+                        Text(viewModel.generateButtonLabel)
                             .font(.system(size: 14, weight: .bold))
                     }
                     .frame(maxWidth: .infinity)
@@ -95,7 +95,11 @@ private struct LeftPanel: View {
 
                 // Improve CV section — appears after first generation
                 if viewModel.generationDone {
-                    ImproveCVSection(viewModel: viewModel)
+                    if viewModel.cvFullyOptimized {
+                        CVOptimizedBanner(score: viewModel.scoreBreakdown)
+                    } else if !viewModel.feedbackItems.isEmpty {
+                        ImproveCVSection(viewModel: viewModel)
+                    }
                 }
             }
             .padding(.horizontal, 24)
@@ -248,6 +252,54 @@ private struct StepStatusBadge: View {
     }
 }
 
+// MARK: - CV Optimized Banner
+
+private struct CVOptimizedBanner: View {
+    let score: MatchScoreBreakdown?
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.statusOfferBg)
+                    .frame(width: 36, height: 36)
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 17))
+                    .foregroundStyle(Color.statusOffer)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("CV Fully Optimized")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.inkPrimary)
+                Text("All improvement rounds complete. Export your CV when ready.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            if let score {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(score.matchScore)%")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Color.inkPrimary)
+                    Text("match")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.inkTertiary)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.statusOffer.opacity(0.4), lineWidth: 1))
+        .shadow(color: .black.opacity(0.04), radius: 1)
+        .shadow(color: .black.opacity(0.04), radius: 18, y: 5)
+    }
+}
+
 // MARK: - Improve CV Section
 
 private struct ImproveCVSection: View {
@@ -357,27 +409,29 @@ private struct ImproveCVSection: View {
                 )
             }
 
-            // Footer
-            VStack(spacing: 12) {
-                Text("Applied changes are saved back to your knowledge base, so you won't be asked again.")
+            // Footer — directs user back to the single Generate button at the top
+            let appliedCount = viewModel.feedbackItems.filter { $0.state == .applied }.count
+            if appliedCount > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.statusOffer)
+                    Text("Click **\(viewModel.generateButtonLabel)** above to rebuild your CV.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.inkSecondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.statusOfferBg)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.statusOffer.opacity(0.3), lineWidth: 1))
+            } else {
+                Text("Apply suggestions above, then the Generate button will activate to rebuild your CV.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.inkTertiary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-
-                Button {
-                    viewModel.regenerateCV()
-                } label: {
-                    Text("Regenerate CV")
-                        .font(.system(size: 14, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.inkPrimary)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isGenerating)
             }
         }
     }

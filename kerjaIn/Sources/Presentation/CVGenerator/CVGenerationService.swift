@@ -119,7 +119,7 @@ enum CVGenerationService {
 
             Completed JSON:
             """
-        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 500)
+        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 700)
         return try MLXInferenceService.decode(ExtractedRequirements.self, from: raw)
     }
 
@@ -129,8 +129,11 @@ enum CVGenerationService {
         requirements: ExtractedRequirements,
         profileSummary: String
     ) async throws -> MatchAnalysis {
-        let mustHaveList   = requirements.mustHaveSkills.map   { "• \($0)" }.joined(separator: "\n")
-        let niceToHaveList = requirements.niceToHaveSkills.map { "• \($0)" }.joined(separator: "\n")
+        // Cap to 6 must-have + 4 nice-to-have so the JSON output stays within the token budget
+        let mustHave   = Array(requirements.mustHaveSkills.prefix(6))
+        let niceToHave = Array(requirements.niceToHaveSkills.prefix(4))
+        let mustHaveList   = mustHave.map   { "• \($0)" }.joined(separator: "\n")
+        let niceToHaveList = niceToHave.map { "• \($0)" }.joined(separator: "\n")
 
         let system = "You complete JSON templates by filling in placeholder values."
         let prompt = """
@@ -150,7 +153,7 @@ enum CVGenerationService {
 
             Completed JSON:
             """
-        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 700)
+        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 1400)
         return try MLXInferenceService.decode(MatchAnalysis.self, from: raw)
     }
 
@@ -224,6 +227,54 @@ enum CVGenerationService {
         }
 
         return ComposedCVContent(professionalSummary: summary, highlightedSkills: skills)
+    }
+
+    // MARK: - Bullet Rewriter (called once per applied feedback item that has a bullet)
+
+    static func rewriteBullet(
+        original: String,
+        userContext: String,
+        jd: String
+    ) async throws -> String {
+        let system = "You improve CV bullet points. Return ONLY the improved bullet, one line, no explanation."
+        let hasContext = !userContext.trimmingCharacters(in: .whitespaces).isEmpty
+        let prompt = hasContext
+            ? """
+                Improve this CV bullet by incorporating the provided information.
+
+                Original: \(original)
+                New information: \(userContext)
+                Target role: \(String(jd.prefix(120)))
+
+                Rules: strong action verb opener, no I/me/my, concise one line, include the new information naturally.
+
+                Improved bullet:
+                """
+            : """
+                Rewrite this CV bullet to start with a strong action verb.
+
+                Original: \(original)
+
+                Rules: replace weak openers (Responsible for / Helped / Utilized / Assisted) with a strong verb; remove filler phrases (fast learner / team player); same meaning, stronger delivery.
+
+                Rewritten bullet:
+                """
+        let raw = try await MLXInferenceService.shared.generate(system: system, prompt: prompt, maxTokens: 150)
+        return Self.cleanBulletOutput(raw)
+    }
+
+    private static func cleanBulletOutput(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        s = s.components(separatedBy: "\n")
+             .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? s
+        for prefix in ["Improved bullet:", "Rewritten bullet:", "Improved:", "Rewritten:", "Bullet:", "Output:"] {
+            if s.lowercased().hasPrefix(prefix.lowercased()) {
+                s = String(s.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                break
+            }
+        }
+        if s.hasPrefix("•") || s.hasPrefix("-") { s = String(s.dropFirst()).trimmingCharacters(in: .whitespaces) }
+        return s
     }
 
     // MARK: - Client-side relevance filter (no LLM — pure keyword matching)
@@ -308,12 +359,13 @@ enum CVGenerationService {
             {"items":[{"type":"weakBullet","reasonCode":"MISSING_METRIC","title":"...","existingBullet":"...","improvementQuestion":"...","skillExplanation":""}]}
 
             reasonCode must be one of:
-            MISSING_METRIC — bullet has no number/result → ask user for the metric
-            BANNED_VERB — bullet starts with weak verb → improvementQuestion must be ""
-            CLICHE — contains filler phrase → improvementQuestion must be ""
-            MISSING_KEYWORD — partial skill match → ask user to describe where they used it
-            NO_BACKING — skill completely absent → improvementQuestion must be "", skillExplanation explains why it matters
+            MISSING_METRIC — bullet describes an achievement with no number → improvementQuestion asks for ONE specific fact (e.g. "How many users?", "What percentage faster?"). existingBullet = exact bullet text.
+            BANNED_VERB — bullet starts with "Responsible for" / "Helped" / "Utilized" / "Assisted" → improvementQuestion must be "". existingBullet = exact bullet text. Model auto-rewrites.
+            CLICHE — contains "fast learner" / "team player" / "passionate" / "detail-oriented" → improvementQuestion must be "". existingBullet = exact bullet text. Model auto-rewrites.
+            MISSING_KEYWORD — required skill is partially evidenced → improvementQuestion asks for ONE specific example ("Which project used X?", "At which company did you apply Y?"). existingBullet = relevant bullet or "".
+            NO_BACKING — required skill has zero evidence → improvementQuestion must be "", skillExplanation states what is missing and why it matters for this role.
 
+            IMPORTANT: improvementQuestion must ONLY ask for a specific fact (number, project name, company, date). NEVER ask the user to rephrase or rewrite — the model does the rewriting.
             type: "weakBullet" for bullet rewrites, "missingSkill" for missing/partial skills
 
             Candidate profile (skills and experience):
@@ -385,6 +437,7 @@ enum CVGenerationService {
                 tagLabel:         tagLabel,
                 title:            item.title,
                 bulletQuote:      item.existingBullet.isEmpty ? "" : "\"\(item.existingBullet)\"",
+                rawBullet:        item.existingBullet,
                 question:         question,
                 inputPlaceholder: placeholder,
                 helperText:       helperText,
