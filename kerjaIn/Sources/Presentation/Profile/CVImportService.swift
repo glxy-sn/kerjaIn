@@ -325,7 +325,7 @@ enum CVImportService {
     private static func buildSecondarySource(from text: String) -> String {
         // Traditional section-header format
         let projSection  = findSectionText(from: text, matching: ["PROJECT", "PORTFOLIO", "PROYEK"])
-        let certSection  = findSectionText(from: text, matching: ["CERTIF", "LICENSE", "CREDENTIAL", "SERTIFIK"])
+        let certSection  = findSectionText(from: text, matching: ["CERTIF", "LICENSE", "CREDENTIAL", "SERTIFIKAT"])
         let orgSection   = findSectionText(from: text, matching: ["ORGANIZATION", "EXTRACURRICULAR", "VOLUNTEER", "ORGANISASI", "KEPANITIAAN", "UKM"])
         let awardSection = findSectionText(from: text, matching: ["ACHIEVEMENT", "AWARD", "HONOR", "PRESTASI", "PENGHARGAAN"])
 

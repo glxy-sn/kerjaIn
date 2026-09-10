@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import PDFKit
 import UniformTypeIdentifiers
 
 struct CVGeneratorView: View {
@@ -27,7 +26,7 @@ struct CVGeneratorView: View {
         }
         .onAppear { viewModel.load() }
         .sheet(isPresented: $viewModel.showCustomize) {
-            CustomizeSectionsSheet()
+            CustomizeSectionsSheet(sections: $viewModel.sections)
         }
     }
 }
@@ -802,10 +801,6 @@ private struct RightPanel: View {
 
     @MainActor
     private func exportPDF(cvData: CVData) {
-        let renderer = ImageRenderer(content: CVExportContent(cvData: cvData))
-        renderer.scale = 2
-        guard let nsImage = renderer.nsImage else { return }
-
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         let name = cvData.profile.name.isEmpty
@@ -815,11 +810,21 @@ private struct RightPanel: View {
 
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            let doc = PDFDocument()
-            if let page = PDFPage(image: nsImage) {
-                doc.insert(page, at: 0)
-            }
-            _ = doc.write(to: url)
+
+            // Render the full document without ScrollView clipping, using vector PDF
+            let pageWidth: CGFloat = 612  // US Letter points
+            let exportView = CVDocumentView(cvData: cvData)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 36)
+                .frame(width: pageWidth)
+
+            let host = NSHostingView(rootView: exportView)
+            host.frame = CGRect(x: 0, y: 0, width: pageWidth, height: 8000)
+            let fittingHeight = max(host.fittingSize.height, 792)  // at least US Letter height
+            host.frame = CGRect(x: 0, y: 0, width: pageWidth, height: fittingHeight)
+
+            let pdfData = host.dataWithPDF(inside: host.bounds)
+            try? pdfData.write(to: url)
         }
     }
 
@@ -831,7 +836,7 @@ private struct RightPanel: View {
 
             if viewModel.generationDone {
                 Button {
-                    exportPDF(cvData: viewModel.cvData)
+                    exportPDF(cvData: viewModel.filteredCVData)
                 } label: {
                     HStack(spacing: 7) {
                         Image(systemName: "arrow.down.doc.fill")
@@ -854,36 +859,11 @@ private struct RightPanel: View {
     }
 }
 
-// MARK: - CV Export Content
-
-private struct CVExportContent: View {
-    let cvData: CVData
-    var body: some View {
-        CVPreviewCard(cvData: cvData, forceEmpty: false)
-            .frame(width: 560)
-    }
-}
-
 // MARK: - Customize Sections Sheet
-
-private struct SectionConfig {
-    var name: String
-    var detail: String
-    var enabled: Bool
-}
 
 private struct CustomizeSectionsSheet: View {
     @Environment(\.dismiss) private var dismiss
-
-    @State private var sections: [SectionConfig] = [
-        SectionConfig(name: "Professional Summary", detail: "1 paragraph",       enabled: true),
-        SectionConfig(name: "Experience",           detail: "3 selected",        enabled: true),
-        SectionConfig(name: "Projects",             detail: "2 selected",        enabled: true),
-        SectionConfig(name: "Skills",               detail: "8 tags",            enabled: true),
-        SectionConfig(name: "Education",            detail: "1 entry",           enabled: true),
-        SectionConfig(name: "Certifications",       detail: "off for this role", enabled: false),
-        SectionConfig(name: "Honors & Awards",      detail: "off for this role", enabled: false),
-    ]
+    @Binding var sections: [SectionConfig]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -942,7 +922,7 @@ private struct CustomizeSectionsSheet: View {
             HStack(spacing: 12) {
                 Spacer()
                 Button("Reset to default") {
-                    for i in sections.indices { sections[i].enabled = i < 5 }
+                    sections = CVGeneratorViewModel.defaultSections
                 }
                 .buttonStyle(SheetSecondaryStyle())
 

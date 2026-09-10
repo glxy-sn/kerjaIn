@@ -2,6 +2,14 @@ import Foundation
 import SwiftUI
 import Observation
 
+// MARK: - Section Config
+
+struct SectionConfig {
+    var name: String
+    var detail: String
+    var enabled: Bool
+}
+
 // MARK: - Match Scoring
 
 enum ReadinessGate {
@@ -111,19 +119,52 @@ final class CVGeneratorViewModel {
     var isLivePipeline: Bool = false
     var lastPipelineError: String = ""
 
-    // CVData filtered to only relevant experiences/projects for the preview
+    // JD-tailored skills from the CVComposer (not persisted — only shown in filtered preview)
+    var generatedSkills: [String] = []
+
+    // Section visibility toggles for the generated CV preview
+    var sections: [SectionConfig] = CVGeneratorViewModel.defaultSections
+
+    static let defaultSections: [SectionConfig] = [
+        SectionConfig(name: "Professional Summary", detail: "1 paragraph",       enabled: true),
+        SectionConfig(name: "Experience",           detail: "3 selected",        enabled: true),
+        SectionConfig(name: "Projects",             detail: "2 selected",        enabled: true),
+        SectionConfig(name: "Skills",               detail: "8 tags",            enabled: true),
+        SectionConfig(name: "Education",            detail: "1 entry",           enabled: true),
+        SectionConfig(name: "Certifications",       detail: "off for this role", enabled: false),
+        SectionConfig(name: "Honors & Awards",      detail: "off for this role", enabled: false),
+        SectionConfig(name: "Organizations",        detail: "off for this role", enabled: false),
+    ]
+
+    // CVData filtered to only relevant experiences/projects, with section visibility applied
     var filteredCVData: CVData {
         guard generationDone else { return cvData }
         var filtered = cvData
-        if !selectedExperienceIndices.isEmpty {
+        let enabled = Set(sections.filter(\.enabled).map(\.name))
+
+        if !enabled.contains("Experience") {
+            filtered.experiences = []
+        } else if !selectedExperienceIndices.isEmpty {
             filtered.experiences = selectedExperienceIndices
                 .filter { $0 < cvData.experiences.count }
                 .map    { cvData.experiences[$0] }
         }
-        if !selectedProjectIndices.isEmpty {
+        if !enabled.contains("Projects") {
+            filtered.projects = []
+        } else if !selectedProjectIndices.isEmpty {
             filtered.projects = selectedProjectIndices
                 .filter { $0 < cvData.projects.count }
                 .map    { cvData.projects[$0] }
+        }
+        if !enabled.contains("Education")            { filtered.educations = [] }
+        if !enabled.contains("Certifications")       { filtered.certifications = [] }
+        if !enabled.contains("Honors & Awards")      { filtered.achievements = [] }
+        if !enabled.contains("Organizations")        { filtered.organizations = [] }
+        if !enabled.contains("Professional Summary") { filtered.profile.summary = "" }
+        if !enabled.contains("Skills") {
+            filtered.profile.skills = []
+        } else if !generatedSkills.isEmpty {
+            filtered.profile.skills = generatedSkills
         }
         return filtered
     }
@@ -210,6 +251,7 @@ final class CVGeneratorViewModel {
         scoreBreakdown = nil
         selectedExperienceIndices = []
         selectedProjectIndices = []
+        generatedSkills = []
         for i in steps.indices { steps[i].state = .waiting }
 
         Task { @MainActor [weak self] in
@@ -264,6 +306,9 @@ final class CVGeneratorViewModel {
                 appliedImprovements: appliedAnswers
             )
             cvData.profile.summary = composed.professionalSummary
+            if !composed.highlightedSkills.isEmpty {
+                generatedSkills = composed.highlightedSkills
+            }
             steps[2].state = .done
 
             // Step 4 — GapReviewer (excludes all resolved suggestions)

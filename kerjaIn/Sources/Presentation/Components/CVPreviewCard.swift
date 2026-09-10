@@ -54,7 +54,7 @@ struct CVPreviewCard: View {
     }
 }
 
-private struct CVDocumentView: View {
+struct CVDocumentView: View {
     let cvData: CVData
 
     var body: some View {
@@ -128,6 +128,12 @@ private struct CVDocumentView: View {
                                     .foregroundStyle(Color.inkPrimary.opacity(0.7))
                                     .lineSpacing(2)
                                     .padding(.top, 2)
+                            }
+                            ForEach(exp.highlights.filter { !$0.isEmpty }, id: \.self) { h in
+                                Text("• \(h)")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Color.inkPrimary.opacity(0.8))
+                                    .lineSpacing(2)
                             }
                         }
                         .padding(.bottom, 8)
