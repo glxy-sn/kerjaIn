@@ -286,6 +286,7 @@ enum CVImportService {
             - experiences: ALL jobs, internships, part-time, freelance work.
             - Copy highlight bullets VERBATIM. If no bullets for an entry, use [].
             - Include EVERY entry — do not stop after 1 or 2.
+            - Dates (startYear, endYear, startDate, endDate): use abbreviated 'Mon YYYY' format (e.g. 'Sept 2020', 'Dec 2024'). Use just 'YYYY' only when month is not shown in the resume. Use 'Present' for ongoing roles.
 
             Resume:
             \(source)

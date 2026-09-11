@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import PDFKit
 
 struct CVGeneratorView: View {
     var viewModel: CVGeneratorViewModel
@@ -878,8 +879,29 @@ private struct RightPanel: View {
             host.frame = CGRect(x: 0, y: 0, width: pageWidth, height: fittingHeight)
 
             let pdfData = host.dataWithPDF(inside: host.bounds)
-            try? pdfData.write(to: url)
+            // Post-process: inject PDF link annotations for each named profile link
+            let finalData = Self.injectPDFLinks(into: pdfData, links: cvData.profile.links)
+            try? finalData.write(to: url)
         }
+    }
+
+    // Searches the rendered PDF for each link label and adds a PDFAnnotation so
+    // the link is clickable in any PDF reader. dataWithPDF generates vector text
+    // but no hyperlink metadata — this adds it after the fact.
+    private static func injectPDFLinks(into data: Data, links: [ProfileLink]) -> Data {
+        guard let doc = PDFDocument(data: data) else { return data }
+        for link in links where !link.label.isEmpty && !link.url.isEmpty {
+            let raw = link.url.trimmingCharacters(in: .whitespaces)
+            let urlStr = raw.lowercased().hasPrefix("http") ? raw : "https://\(raw)"
+            guard let url = URL(string: urlStr) else { continue }
+            for sel in doc.findString(link.label, withOptions: .caseInsensitive) {
+                guard let page = sel.pages.first else { continue }
+                let annot = PDFAnnotation(bounds: sel.bounds(for: page), forType: .link, withProperties: nil)
+                annot.action = PDFActionURL(url: url)
+                page.addAnnotation(annot)
+            }
+        }
+        return doc.dataRepresentation() ?? data
     }
 
     var body: some View {
