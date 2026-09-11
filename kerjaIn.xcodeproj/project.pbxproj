@@ -13,13 +13,62 @@
 		45270A45304EAE3F00AD9E25 /* MLXMNIST in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A44304EAE3F00AD9E25 /* MLXMNIST */; };
 		45270A47304EAE3F00AD9E25 /* MLXVLM in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A46304EAE3F00AD9E25 /* MLXVLM */; };
 		45270A49304EAE3F00AD9E25 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = 45270A48304EAE3F00AD9E25 /* StableDiffusion */; };
+		45382EC53053997F00574CC6 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 45382EC43053997E00574CC6 /* WidgetKit.framework */; };
+		45382EC73053997F00574CC6 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 45382EC63053997F00574CC6 /* SwiftUI.framework */; };
+		45382ED43053997F00574CC6 /* kerjaInWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 45382EC23053997E00574CC6 /* kerjaInWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		45382ED23053997F00574CC6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 456DDD24304A9AD500E6AE62 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 45382EC13053997E00574CC6;
+			remoteInfo = kerjaInWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		45382ED93053997F00574CC6 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				45382ED43053997F00574CC6 /* kerjaInWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		45382EC23053997E00574CC6 /* kerjaInWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = kerjaInWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		45382EC43053997E00574CC6 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		45382EC63053997F00574CC6 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		45382EE830539AC000574CC6 /* kerjaInWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = kerjaInWidgetExtension.entitlements; sourceTree = "<group>"; };
 		456DDD2C304A9AD500E6AE62 /* kerjaIn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kerjaIn.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		45382ED53053997F00574CC6 /* Exceptions for "kerjaInWidget" folder in "kerjaInWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 45382EC13053997E00574CC6 /* kerjaInWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		45382EC83053997F00574CC6 /* kerjaInWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				45382ED53053997F00574CC6 /* Exceptions for "kerjaInWidget" folder in "kerjaInWidgetExtension" target */,
+			);
+			path = kerjaInWidget;
+			sourceTree = "<group>";
+		};
 		456DDD2E304A9AD500E6AE62 /* kerjaIn */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kerjaIn;
@@ -28,6 +77,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		45382EBF3053997E00574CC6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				45382EC73053997F00574CC6 /* SwiftUI.framework in Frameworks */,
+				45382EC53053997F00574CC6 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		456DDD29304A9AD500E6AE62 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -44,10 +102,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		45382EC33053997E00574CC6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				45382EC43053997E00574CC6 /* WidgetKit.framework */,
+				45382EC63053997F00574CC6 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		456DDD23304A9AD500E6AE62 = {
 			isa = PBXGroup;
 			children = (
+				45382EE830539AC000574CC6 /* kerjaInWidgetExtension.entitlements */,
 				456DDD2E304A9AD500E6AE62 /* kerjaIn */,
+				45382EC83053997F00574CC6 /* kerjaInWidget */,
+				45382EC33053997E00574CC6 /* Frameworks */,
 				456DDD2D304A9AD500E6AE62 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +126,7 @@
 			isa = PBXGroup;
 			children = (
 				456DDD2C304A9AD500E6AE62 /* kerjaIn.app */,
+				45382EC23053997E00574CC6 /* kerjaInWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -63,6 +134,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		45382EC13053997E00574CC6 /* kerjaInWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 45382ED63053997F00574CC6 /* Build configuration list for PBXNativeTarget "kerjaInWidgetExtension" */;
+			buildPhases = (
+				45382EBE3053997E00574CC6 /* Sources */,
+				45382EBF3053997E00574CC6 /* Frameworks */,
+				45382EC03053997E00574CC6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				45382EC83053997F00574CC6 /* kerjaInWidget */,
+			);
+			name = kerjaInWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = kerjaInWidgetExtension;
+			productReference = 45382EC23053997E00574CC6 /* kerjaInWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		456DDD2B304A9AD500E6AE62 /* kerjaIn */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 456DDD39304A9AD600E6AE62 /* Build configuration list for PBXNativeTarget "kerjaIn" */;
@@ -70,10 +163,12 @@
 				456DDD28304A9AD500E6AE62 /* Sources */,
 				456DDD29304A9AD500E6AE62 /* Frameworks */,
 				456DDD2A304A9AD500E6AE62 /* Resources */,
+				45382ED93053997F00574CC6 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				45382ED33053997F00574CC6 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				456DDD2E304A9AD500E6AE62 /* kerjaIn */,
@@ -101,6 +196,9 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					45382EC13053997E00574CC6 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 					456DDD2B304A9AD500E6AE62 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -124,11 +222,19 @@
 			projectRoot = "";
 			targets = (
 				456DDD2B304A9AD500E6AE62 /* kerjaIn */,
+				45382EC13053997E00574CC6 /* kerjaInWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		45382EC03053997E00574CC6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		456DDD2A304A9AD500E6AE62 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -139,6 +245,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		45382EBE3053997E00574CC6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		456DDD28304A9AD500E6AE62 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -148,7 +261,115 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		45382ED33053997F00574CC6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 45382EC13053997E00574CC6 /* kerjaInWidgetExtension */;
+			targetProxy = 45382ED23053997F00574CC6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		45382ED73053997F00574CC6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = kerjaInWidgetExtension.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QW8PFJL6C3;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_PICTURE_FOLDER = readwrite;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = kerjaInWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = kerjaInWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tiara.kerjaIn.kerjaInWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		45382ED83053997F00574CC6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = kerjaInWidgetExtension.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QW8PFJL6C3;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_MUSIC_FOLDER = readwrite;
+				ENABLE_FILE_ACCESS_PICTURE_FOLDER = readwrite;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = kerjaInWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = kerjaInWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tiara.kerjaIn.kerjaInWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		456DDD37304A9AD600E6AE62 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -274,6 +495,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = kerjaIn/kerjaIn.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -320,6 +542,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = kerjaIn/kerjaIn.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -364,6 +587,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		45382ED63053997F00574CC6 /* Build configuration list for PBXNativeTarget "kerjaInWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				45382ED73053997F00574CC6 /* Debug */,
+				45382ED83053997F00574CC6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		456DDD27304A9AD500E6AE62 /* Build configuration list for PBXProject "kerjaIn" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -1,7 +1,22 @@
 import Foundation
+import WidgetKit
 
 final class LocalDataSource {
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults = {
+        let group = UserDefaults(suiteName: "group.com.tiara.kerjaIn") ?? .standard
+        // One-time migration: copy existing data from .standard into the App Group
+        if group.data(forKey: "jobHistory") == nil,
+           let legacy = UserDefaults.standard.data(forKey: "jobHistory") {
+            group.set(legacy, forKey: "jobHistory")
+        }
+        if group.data(forKey: "userProfile") == nil,
+           let legacy = UserDefaults.standard.data(forKey: "userProfile") {
+            group.set(legacy, forKey: "userProfile")
+        }
+        group.synchronize()
+        DispatchQueue.main.async { WidgetCenter.shared.reloadAllTimelines() }
+        return group
+    }()
     private let profileKey = "userProfile"
     private let cvKey = "cvData"
     private let historyKey = "jobHistory"
@@ -45,5 +60,9 @@ final class LocalDataSource {
     func saveHistory(_ history: [JobHistory]) {
         guard let data = try? encoder.encode(history) else { return }
         defaults.set(data, forKey: historyKey)
+        defaults.synchronize()
+        DispatchQueue.main.async {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 }
