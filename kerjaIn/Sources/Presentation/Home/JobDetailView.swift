@@ -7,6 +7,7 @@ struct JobDetailView: View {
 
     @State private var showingEdit = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(Router.self) private var router
 
     private var logoColor: Color {
         let palette: [Color] = [.statusApplied, Color(hex: "111111"), Color(hex: "1db954"),
@@ -55,6 +56,16 @@ struct JobDetailView: View {
                         DetailRow(label: "Location", value: entry.location)
                     }
                     DetailRow(label: "Role",     value: entry.position)
+                }
+
+                // Generate CV CTA
+                GenerateCVBanner(hasJobDescription: !entry.notes.isEmpty) {
+                    if let ud = UserDefaults(suiteName: "group.com.tiara.kerjaIn"),
+                       !entry.notes.isEmpty {
+                        ud.set(entry.notes, forKey: "pendingJobDescription")
+                        ud.synchronize()
+                    }
+                    router.selectedTab = .cvGenerator
                 }
 
                 // Notes / Job description
@@ -134,5 +145,49 @@ private struct DetailRow: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.lightSeparator).frame(height: 1)
         }
+    }
+}
+
+private struct GenerateCVBanner: View {
+    let hasJobDescription: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 14) {
+                Image(systemName: "character.textbox.badge.sparkles")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.inkPrimary)
+                    .frame(width: 36, height: 36)
+                    .background(Color.inkPrimary.opacity(0.07))
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Generate CV for this role")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.inkPrimary)
+                    Text(hasJobDescription
+                         ? "Uses the saved job description to tailor your CV"
+                         : "Open CV Generator for this application")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.inkSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.inkTertiary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.appSeparator, lineWidth: 1))
+            .shadow(color: .black.opacity(0.04), radius: 1)
+            .shadow(color: .black.opacity(0.05), radius: 20, y: 6)
+        }
+        .buttonStyle(.plain)
     }
 }

@@ -26,5 +26,13 @@ struct RootView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .environment(router)
+        .onOpenURL { url in
+            guard url.scheme == "kerjaIn" else { return }
+            if url.host == "generate" {
+                router.selectedTab = .cvGenerator
+            } else {
+                router.selectedTab = .history
+            }
+        }
     }
 }

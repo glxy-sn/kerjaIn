@@ -211,6 +211,13 @@ final class CVGeneratorViewModel {
         if cvData.profile == .empty {
             cvData.profile = profileRepository.getProfile()
         }
+        // Pre-fill job description from Share Extension if available
+        if let ud = UserDefaults(suiteName: "group.com.tiara.kerjaIn"),
+           let pending = ud.string(forKey: "pendingJobDescription"),
+           !pending.isEmpty {
+            jobDescription = pending
+            ud.removeObject(forKey: "pendingJobDescription")
+        }
     }
 
     func save() {

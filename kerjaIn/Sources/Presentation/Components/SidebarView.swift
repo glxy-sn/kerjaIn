@@ -6,18 +6,34 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(spacing: 3) {
+            // App title
+            Text("kerjaIn")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(Color.inkPrimary)
+                .padding(.horizontal, 24)
+                .padding(.top, 22)
+                .padding(.bottom, 18)
+
+            // Main navigation
+            SidebarSectionLabel("MENU")
+            VStack(spacing: 2) {
                 SidebarNavItem(icon: "house", label: "Home",
                                isActive: selectedTab == .home) { selectedTab = .home }
-                SidebarNavItem(icon: "character.textbox.badge.sparkles", label: "CV Generator",
-                               isActive: selectedTab == .cvGenerator) { selectedTab = .cvGenerator }
                 SidebarNavItem(icon: "clock.arrow.circlepath", label: "History",
                                isActive: selectedTab == .history) { selectedTab = .history }
                 SidebarNavItem(icon: "person.circle", label: "Profile",
                                isActive: selectedTab == .profile) { selectedTab = .profile }
             }
             .padding(.horizontal, 12)
-            .padding(.top, 14)
+
+            // Tools section
+            SidebarSectionLabel("TOOLS")
+                .padding(.top, 10)
+            VStack(spacing: 2) {
+                SidebarNavItem(icon: "character.textbox.badge.sparkles", label: "CV Generator",
+                               isActive: selectedTab == .cvGenerator) { selectedTab = .cvGenerator }
+            }
+            .padding(.horizontal, 12)
 
             Spacer()
             Divider()
@@ -36,7 +52,7 @@ struct SidebarView: View {
                         Text(userName.isEmpty ? "User" : userName)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Color.inkPrimary)
-                        Text("Profile")
+                        Text("Profile & Settings")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.inkSecondary)
                     }
@@ -51,6 +67,19 @@ struct SidebarView: View {
         .onAppear {
             userName = ProfileRepositoryImpl(dataSource: LocalDataSource()).getProfile().name
         }
+    }
+}
+
+private struct SidebarSectionLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color.inkSecondary.opacity(0.6))
+            .padding(.horizontal, 24)
+            .padding(.bottom, 4)
     }
 }
 
