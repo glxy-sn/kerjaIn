@@ -1,0 +1,5 @@
+iOS Developer
+
+Required: Swift, SwiftUI, Git, and clear written communication.
+Preferred: experience with SwiftData and automated testing using XCTest.
+You will develop native iOS features and collaborate with designers.
