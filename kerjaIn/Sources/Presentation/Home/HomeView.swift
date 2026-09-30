@@ -45,7 +45,7 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 15)
                     .padding(.vertical, 9)
-                    .background(Color.inkPrimary)
+                    .background(Color.primaryAction)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                 }
@@ -121,7 +121,7 @@ struct HomeView: View {
                         }
                         .tint(.blue)
                     }
-                    .listRowBackground(Color.white)
+                    .listRowBackground(Color.cardSurface)
                     .listRowSeparatorTint(Color.lightSeparator)
                     .listRowInsets(EdgeInsets(top: 0, leading: 26, bottom: 0, trailing: 26))
                 }
@@ -145,6 +145,11 @@ struct HomeView: View {
                 onSave: { viewModel.addApplication($0) },
                 onSaveAndGenerate: { entry in
                     viewModel.addApplication(entry)
+                    if let ud = UserDefaults(suiteName: "group.com.tiara.kerjaIn"),
+                       !entry.notes.isEmpty {
+                        ud.set(entry.notes, forKey: "pendingJobDescription")
+                        ud.synchronize()
+                    }
                     router.selectedTab = .cvGenerator
                 }
             )
@@ -175,7 +180,7 @@ private struct HomeStatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
-        .background(Color.white)
+        .background(Color.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)

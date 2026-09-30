@@ -135,7 +135,7 @@ struct EditProfileSheet: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 9)
-                    .background(Color.inkPrimary)
+                    .background(Color.primaryAction)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                     .buttonStyle(.plain)
             }
@@ -174,7 +174,7 @@ private struct SheetCard<Content: View>: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
+        .background(Color.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.appSeparator, lineWidth: 1))
     }

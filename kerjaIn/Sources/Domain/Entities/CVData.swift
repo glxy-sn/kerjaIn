@@ -1,5 +1,14 @@
 import Foundation
 
+struct GeneratedCV: Identifiable, Codable {
+    var id: String = UUID().uuidString
+    var generatedAt: Date = Date()
+    var roleName: String = ""
+    var jobDescription: String = ""
+    var matchScore: Int? = nil
+    var cvData: CVData
+}
+
 struct CVData: Codable, Equatable {
     var profile: UserProfile
     var educations: [Education]
@@ -106,14 +115,15 @@ struct Project: Codable, Equatable, Identifiable {
     var id: String
     var name: String
     var role: String
+    var year: String
     var techStack: String
     var highlights: [String]
     var links: [ProfileLink]  // e.g. [("video demo", url), ("GitHub", url)]
 
     init(id: String = UUID().uuidString, name: String = "", role: String = "",
-         techStack: String = "", highlights: [String] = [""], links: [ProfileLink] = []) {
+         year: String = "", techStack: String = "", highlights: [String] = [""], links: [ProfileLink] = []) {
         self.id = id; self.name = name; self.role = role
-        self.techStack = techStack; self.highlights = highlights; self.links = links
+        self.year = year; self.techStack = techStack; self.highlights = highlights; self.links = links
     }
 
     init(from decoder: Decoder) throws {
@@ -121,6 +131,7 @@ struct Project: Codable, Equatable, Identifiable {
         id         = (try? c.decode(String.self,        forKey: .id))         ?? UUID().uuidString
         name       = (try? c.decode(String.self,        forKey: .name))       ?? ""
         role       = (try? c.decode(String.self,        forKey: .role))       ?? ""
+        year       = (try? c.decode(String.self,        forKey: .year))       ?? ""
         techStack  = (try? c.decode(String.self,        forKey: .techStack))  ?? ""
         highlights = (try? c.decode([String].self,      forKey: .highlights)) ?? []
         links      = (try? c.decode([ProfileLink].self, forKey: .links))      ?? []

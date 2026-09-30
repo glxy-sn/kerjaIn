@@ -79,7 +79,7 @@ final class MLXInferenceService {
         }
     }
 
-    var selectedModel: MLXModel = .llama3_2_3B
+    var selectedModel: MLXModel = .qwen3_4B
     var loadState: LoadState = .idle
     private var container: ModelContainer?
     private var loadedModel: MLXModel?

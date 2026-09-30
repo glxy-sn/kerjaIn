@@ -404,9 +404,14 @@ final class CVGeneratorViewModel {
                 feedbackItems = CVGenerationService.toFeedbackItems(gaps)
             }
 
-            // Finalise
+            // Finalise — compute score, save snapshot, then surface results
+            let score       = CVGenerationService.calculateScore(from: analysis)
             lastGeneratedJD = jd
-            scoreBreakdown  = CVGenerationService.calculateScore(from: analysis)
+            scoreBreakdown  = score
+            cvRepository.saveGeneratedCV(buildCVSnapshot(
+                roleName: requirements.jobTitle.isEmpty ? "Generated CV" : requirements.jobTitle,
+                jd: jd, score: score.matchScore
+            ))
             isGenerating    = false
             generationDone  = true
         } catch {
@@ -415,6 +420,22 @@ final class CVGeneratorViewModel {
             for i in steps.indices where steps[i].state != .done { steps[i].state = .done }
             await runMockPipeline(resolvedTitles: resolvedTitles)
         }
+    }
+
+    private func buildCVSnapshot(roleName: String, jd: String, score: Int?) -> GeneratedCV {
+        var snapshot = cvData
+        if !generatedSkills.isEmpty { snapshot.profile.skills = generatedSkills }
+        if !selectedExperienceIndices.isEmpty {
+            snapshot.experiences = selectedExperienceIndices
+                .filter { $0 < cvData.experiences.count }
+                .map    { cvData.experiences[$0] }
+        }
+        if !selectedProjectIndices.isEmpty {
+            snapshot.projects = selectedProjectIndices
+                .filter { $0 < cvData.projects.count }
+                .map    { cvData.projects[$0] }
+        }
+        return GeneratedCV(roleName: roleName, jobDescription: jd, matchScore: score, cvData: snapshot)
     }
 
     // Find the original bullet in cvData (experiences then projects) and replace it in-place.
@@ -448,12 +469,16 @@ final class CVGeneratorViewModel {
             steps[i].state = .done
         }
         lastGeneratedJD = jobDescription
-        // Filter out suggestions the user already resolved in the previous run
         let allMock = CVGeneratorViewModel.makeMockFeedback()
-        feedbackItems = allMock.filter { item in
-            !resolvedTitles.contains(item.title)
-        }
-        scoreBreakdown = CVGeneratorViewModel.makeMockScore()
+        feedbackItems = allMock.filter { !resolvedTitles.contains($0.title) }
+        let mockScore = CVGeneratorViewModel.makeMockScore()
+        scoreBreakdown = mockScore
+        let roleName = jobDescription
+            .components(separatedBy: .newlines)
+            .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?
+            .trimmingCharacters(in: .whitespaces)
+            .prefix(60).description ?? "Generated CV"
+        cvRepository.saveGeneratedCV(buildCVSnapshot(roleName: roleName, jd: jobDescription, score: mockScore.matchScore))
         isGenerating   = false
         generationDone = true
     }

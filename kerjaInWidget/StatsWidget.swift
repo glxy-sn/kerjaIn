@@ -31,65 +31,105 @@ struct StatsWidgetView: View {
         }
     }
 
+    // MARK: - Small
+
     private var smallView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("kerjaIn")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(entry.stats.total)")
-                .font(.system(size: 48, weight: .bold))
-                .foregroundStyle(.primary)
-            Text("applications")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            if entry.stats.interview > 0 {
-                HStack(spacing: 5) {
-                    Circle().fill(.orange).frame(width: 7, height: 7)
-                    Text("\(entry.stats.interview) interviewing")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 2)
+        ZStack(alignment: .bottomTrailing) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("kerjaIn")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text("\(entry.stats.total)")
+                    .font(.system(size: 44, weight: .bold))
+                    .foregroundStyle(.primary)
+                Text("applications")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+            Image("computer")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 52)
+                .offset(x: 6, y: 6)
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
+    // MARK: - Medium
+
     private var mediumView: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("kerjaIn")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(entry.stats.total) total")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.primary)
+        ZStack(alignment: .bottomTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                HStack(alignment: .firstTextBaseline) {
+                    Text("kerjaIn")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text("\(entry.stats.total) total")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                }
+                .padding(.bottom, 14)
+
+                // Stats row
+                HStack(spacing: 0) {
+                    StatItem(
+                        icon: "document.on.document.fill",
+                        label: "Applied",
+                        count: entry.stats.applied
+                    )
+                    StatItem(
+                        icon: "person.fill",
+                        label: "Interview",
+                        count: entry.stats.interview
+                    )
+                    StatItem(
+                        icon: "briefcase.fill",
+                        label: "Offer",
+                        count: entry.stats.offer
+                    )
+                    StatItem(
+                        icon: "x.circle.fill",
+                        label: "Rejected",
+                        count: entry.stats.rejected
+                    )
+                }
+
+                Spacer(minLength: 0)
             }
-            HStack(spacing: 0) {
-                StatPill(label: "Applied", count: entry.stats.applied, color: .blue)
-                StatPill(label: "Interview", count: entry.stats.interview, color: .orange)
-                StatPill(label: "Offer", count: entry.stats.offer, color: .green)
-                StatPill(label: "Rejected", count: entry.stats.rejected, color: .red)
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            // Mascot peeking from bottom-right
+            Image("computer")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72)
+                .offset(x: 8, y: 8)
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
-private struct StatPill: View {
+// MARK: - Stat Item
+
+private struct StatItem: View {
+    let icon: String
     let label: String
     let count: Int
-    let color: Color
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.primary)
             Text("\(count)")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundStyle(color)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.primary)
             Text(label)
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
@@ -97,6 +137,8 @@ private struct StatPill: View {
         .frame(maxWidth: .infinity)
     }
 }
+
+// MARK: - Widget
 
 struct StatsWidget: Widget {
     let kind = "KerjaInStatsWidget"

@@ -17,9 +17,10 @@ final class LocalDataSource {
         DispatchQueue.main.async { WidgetCenter.shared.reloadAllTimelines() }
         return group
     }()
-    private let profileKey = "userProfile"
-    private let cvKey = "cvData"
-    private let historyKey = "jobHistory"
+    private let profileKey    = "userProfile"
+    private let cvKey         = "cvData"
+    private let historyKey    = "jobHistory"
+    private let cvHistoryKey  = "generatedCVHistory"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -63,6 +64,34 @@ final class LocalDataSource {
         defaults.synchronize()
         DispatchQueue.main.async {
             WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    func getGeneratedCVs() -> [GeneratedCV] {
+        guard let data = defaults.data(forKey: cvHistoryKey),
+              let list = try? decoder.decode([GeneratedCV].self, from: data)
+        else { return [] }
+        return list
+    }
+
+    func saveGeneratedCV(_ cv: GeneratedCV) {
+        var list = getGeneratedCVs()
+        if let idx = list.firstIndex(where: { $0.id == cv.id }) {
+            list[idx] = cv
+        } else {
+            list.insert(cv, at: 0)
+            if list.count > 30 { list = Array(list.prefix(30)) }
+        }
+        if let data = try? encoder.encode(list) {
+            defaults.set(data, forKey: cvHistoryKey)
+        }
+    }
+
+    func deleteGeneratedCV(id: String) {
+        var list = getGeneratedCVs()
+        list.removeAll { $0.id == id }
+        if let data = try? encoder.encode(list) {
+            defaults.set(data, forKey: cvHistoryKey)
         }
     }
 }

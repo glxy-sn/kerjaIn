@@ -120,7 +120,7 @@ struct CVPreviewCard: View {
                 }
             }
         }
-        .background(Color.white)
+        .background(Color.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -262,11 +262,18 @@ struct CVDocumentView: View {
                                     .font(.custom("Arial", size: 10.5)).bold()
                                     .foregroundStyle(Color.inkPrimary)
                                 Spacer()
-                                if !proj.role.isEmpty {
-                                    Text(proj.role)
-                                        .font(.custom("Arial", size: 10))
-                                        .italic()
-                                        .foregroundStyle(Color.inkSecondary)
+                                HStack(spacing: 6) {
+                                    if !proj.role.isEmpty {
+                                        Text(proj.role)
+                                            .font(.custom("Arial", size: 10))
+                                            .italic()
+                                            .foregroundStyle(Color.inkSecondary)
+                                    }
+                                    if !proj.year.isEmpty {
+                                        Text(proj.year)
+                                            .font(.custom("Arial", size: 10))
+                                            .foregroundStyle(Color.inkSecondary)
+                                    }
                                 }
                             }
                             if !proj.techStack.isEmpty {

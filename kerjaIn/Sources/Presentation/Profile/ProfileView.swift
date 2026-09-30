@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import PDFKit
 import UniformTypeIdentifiers
 
 struct ProfileView: View {
@@ -54,6 +55,24 @@ struct ProfileView: View {
                     .frame(width: 280)
                 }
                 .padding(.horizontal, 26)
+                .padding(.bottom, 24)
+
+                // Export CV
+                Button { exportCV(viewModel: viewModel) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.down.doc.fill")
+                            .font(.system(size: 14))
+                        Text("Export CV as PDF")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(Color.primaryAction)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 26)
                 .padding(.bottom, 40)
             }
         }
@@ -97,6 +116,47 @@ struct ProfileView: View {
             return
         }
         viewModel.importCV(fromText: text)
+    }
+
+    @MainActor
+    private func exportCV(viewModel: ProfileViewModel) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        let name = viewModel.profile.name.isEmpty
+            ? "My_CV"
+            : viewModel.profile.name.replacingOccurrences(of: " ", with: "_")
+        panel.nameFieldStringValue = "\(name)_CV.pdf"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let pageWidth: CGFloat = 612
+            let exportView = CVDocumentView(cvData: viewModel.cvData)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 36)
+                .frame(width: pageWidth)
+            let host = NSHostingView(rootView: exportView)
+            host.frame = CGRect(x: 0, y: 0, width: pageWidth, height: 8000)
+            let fittingHeight = max(host.fittingSize.height, 792)
+            host.frame = CGRect(x: 0, y: 0, width: pageWidth, height: fittingHeight)
+            let pdfData = host.dataWithPDF(inside: host.bounds)
+            let finalData = injectPDFLinks(into: pdfData, links: viewModel.cvData.profile.links)
+            try? finalData.write(to: url)
+        }
+    }
+
+    private func injectPDFLinks(into data: Data, links: [ProfileLink]) -> Data {
+        guard let doc = PDFDocument(data: data) else { return data }
+        for link in links where !link.label.isEmpty && !link.url.isEmpty {
+            let raw = link.url.trimmingCharacters(in: .whitespaces)
+            let urlStr = raw.lowercased().hasPrefix("http") ? raw : "https://\(raw)"
+            guard let url = URL(string: urlStr) else { continue }
+            for sel in doc.findString(link.label, withOptions: .caseInsensitive) {
+                guard let page = sel.pages.first else { continue }
+                let annot = PDFAnnotation(bounds: sel.bounds(for: page), forType: .link, withProperties: nil)
+                annot.action = PDFActionURL(url: url)
+                page.addAnnotation(annot)
+            }
+        }
+        return doc.dataRepresentation() ?? data
     }
 
     private func pickPhoto(viewModel: ProfileViewModel) {
@@ -255,7 +315,7 @@ private struct ItemCard: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color.white)
+            .background(Color.cardSurface)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.appSeparator, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 10))
@@ -292,7 +352,7 @@ private struct InlineEditCard<Content: View>: View {
             content
         }
         .padding(18)
-        .background(Color.white)
+        .background(Color.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.appSeparator, lineWidth: 1))
         .shadow(color: .black.opacity(0.03), radius: 1)
@@ -373,7 +433,7 @@ private struct EditFormFooter: View {
             Button("Save") { onSave() }
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
                 .padding(.horizontal, 20).padding(.vertical, 8)
-                .background(Color.inkPrimary)
+                .background(Color.primaryAction)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .buttonStyle(.plain)
 
@@ -417,7 +477,7 @@ private struct EducationSection: View {
                         }
                         HStack(spacing: 12) {
                             FormRow(label: "Field of Study", value: $viewModel.draftEducation.fieldOfStudy)
-                            FormRow(label: "GPA",            value: $viewModel.draftEducation.gpa, placeholder: "e.g. 3.8")
+                            FormRow(label: "GPA",            value: $viewModel.draftEducation.gpa, placeholder: "e.g. 3.86/4.00")
                         }
                         BulletListEditor(highlights: $viewModel.draftEducation.highlights)
                         EditFormFooter(
@@ -451,7 +511,7 @@ private struct EducationSection: View {
                     }
                     HStack(spacing: 12) {
                         FormRow(label: "Field of Study", value: $viewModel.draftEducation.fieldOfStudy)
-                        FormRow(label: "GPA",            value: $viewModel.draftEducation.gpa, placeholder: "e.g. 3.8")
+                        FormRow(label: "GPA",            value: $viewModel.draftEducation.gpa, placeholder: "e.g. 3.86/4.00")
                     }
                     BulletListEditor(highlights: $viewModel.draftEducation.highlights)
                     EditFormFooter(
@@ -539,6 +599,7 @@ private struct ProjectSection: View {
                         FormRow(label: "Project name", value: $viewModel.draftProject.name)
                         HStack(spacing: 12) {
                             FormRow(label: "Role",       value: $viewModel.draftProject.role,      placeholder: "e.g. Personal, Lead")
+                            FormRow(label: "Year",       value: $viewModel.draftProject.year,      placeholder: "e.g. 2024")
                             FormRow(label: "Tech stack", value: $viewModel.draftProject.techStack, placeholder: "SwiftUI, SwiftData…")
                         }
                         BulletListEditor(highlights: $viewModel.draftProject.highlights)
@@ -550,7 +611,7 @@ private struct ProjectSection: View {
                         )
                     }
                 } else {
-                    let subtitle = [proj.role, proj.techStack].filter { !$0.isEmpty }.joined(separator: " · ")
+                    let subtitle = [proj.role, proj.year, proj.techStack].filter { !$0.isEmpty }.joined(separator: " · ")
                     ItemCard(title: proj.name.isEmpty ? "Project" : proj.name, subtitle: subtitle) {
                         viewModel.startEditProject(proj)
                     }
@@ -562,6 +623,7 @@ private struct ProjectSection: View {
                     FormRow(label: "Project name", value: $viewModel.draftProject.name)
                     HStack(spacing: 12) {
                         FormRow(label: "Role",       value: $viewModel.draftProject.role,      placeholder: "e.g. Personal, Lead")
+                        FormRow(label: "Year",       value: $viewModel.draftProject.year,      placeholder: "e.g. 2024")
                         FormRow(label: "Tech stack", value: $viewModel.draftProject.techStack, placeholder: "SwiftUI, SwiftData…")
                     }
                     BulletListEditor(highlights: $viewModel.draftProject.highlights)
@@ -851,7 +913,7 @@ private struct SkillsSection: View {
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 7)
-                                .background(Color.white)
+                                .background(Color.cardSurface)
                                 .clipShape(Capsule())
                                 .overlay(Capsule().stroke(Color.appSeparator, lineWidth: 1.5))
                             }
@@ -890,7 +952,7 @@ private struct SkillsSection: View {
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white)
+                .background(Color.cardSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.appSeparator, lineWidth: 1))
                 .shadow(color: .black.opacity(0.03), radius: 1)
@@ -1021,7 +1083,7 @@ private struct DocumentsCard: View {
             .padding(16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
+        .background(Color.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.appSeparator, lineWidth: 1))
         .shadow(color: .black.opacity(0.04), radius: 1)

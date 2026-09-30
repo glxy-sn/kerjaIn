@@ -105,7 +105,7 @@ private struct SidebarNavItem: View {
             .background {
                 if isActive {
                     RoundedRectangle(cornerRadius: 9)
-                        .fill(Color.white)
+                        .fill(Color.cardSurface)
                         .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
                         .overlay(
                             RoundedRectangle(cornerRadius: 9)

@@ -287,6 +287,7 @@ enum CVImportService {
             - Copy highlight bullets VERBATIM. If no bullets for an entry, use [].
             - Include EVERY entry — do not stop after 1 or 2.
             - Dates (startYear, endYear, startDate, endDate): use abbreviated 'Mon YYYY' format (e.g. 'Sept 2020', 'Dec 2024'). Use just 'YYYY' only when month is not shown in the resume. Use 'Present' for ongoing roles.
+            - gpa: copy exactly as written, including the scale if shown (e.g. '3.86/4.00', not just '3.86'). If no scale is shown, keep just the number (e.g. '3.8').
 
             Resume:
             \(source)

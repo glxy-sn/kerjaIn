@@ -169,11 +169,11 @@ enum CVGenerationService {
     ) async throws -> ComposedCVContent {
         let system = "You write professional CV content following exact formatting instructions."
         var prompt = """
-            Write a tailored CV summary for the candidate below.
+            Write a tailored professional summary for the CV below.
 
             Target role: \(jobTitle)
             Job description: \(String(jd.prefix(600)))
-            Candidate profile: \(profileSummary)
+            Profile: \(profileSummary)
             """
         if !appliedImprovements.isEmpty {
             prompt += "\nImprovements to incorporate: \(appliedImprovements)"
@@ -181,7 +181,16 @@ enum CVGenerationService {
         prompt += """
 
 
-            Rules: 2-3 sentences, no I/me/my, only facts from the profile, avoid weak verbs like Responsible for / Helped / Utilized.
+            Formula — follow this structure exactly:
+            1. Open with the professional title, years of experience, and specialization (e.g. "iOS Engineer with 5 years of experience building...").
+            2. One sentence with a measurable achievement (a number, percentage, or scale) taken from the profile.
+            3. Close with 2-3 skills/technologies that appear in both the profile and the job description.
+
+            Rules: 2-3 sentences total, plain ATS-friendly text, only facts from the profile — never invent numbers or skills.
+            Never use these words: I, me, my, candidate, applicant, he, she, they.
+            Never use weak verbs: responsible for, helped, assisted with, utilized, worked on, involved in.
+            Never use clichés: team player, hardworking, results-driven, detail-oriented, passionate, dynamic, self-starter, go-getter, excellent communication skills, think outside the box, proven track record.
+            The first word of the summary must be the professional title or a strong descriptor — not a pronoun or label.
 
             Respond with EXACTLY these two labeled lines and nothing else:
             SUMMARY: [your 2-3 sentence summary]

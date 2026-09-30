@@ -41,7 +41,7 @@ struct TopBarView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
-                    .background(Color.inkPrimary)
+                    .background(Color.primaryAction)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                 }

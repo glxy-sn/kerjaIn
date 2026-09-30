@@ -12,7 +12,7 @@ final class DIContainer {
         profileRepository: ProfileRepositoryImpl(dataSource: localDataSource)
     )
     private lazy var _historyViewModel = HistoryViewModel(
-        repository: HistoryRepositoryImpl(dataSource: localDataSource)
+        cvRepository: CVRepositoryImpl(dataSource: localDataSource)
     )
     private lazy var _profileViewModel = ProfileViewModel(
         profileRepository: ProfileRepositoryImpl(dataSource: localDataSource),
